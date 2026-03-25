@@ -1,4 +1,7 @@
+import com.ibm.db2.jcc.t4.ServerListEntry;
+
 import java.sql.* ;
+import java.util.HashSet;
 import java.util.Scanner;
 
 class simpleJDBC
@@ -19,15 +22,12 @@ class simpleJDBC
         try { DriverManager.registerDriver ( new com.ibm.db2.jcc.DB2Driver() ) ; }
         catch (Exception cnfe){ System.out.println("Class not found"); }
 
-        // This is the url you must use for DB2.
-        //Note: This url may not valid now ! Check for the correct year and semester and server name.
+
         String url = "jdbc:db2://winter2026-comp421.cs.mcgill.ca:50000/comp421";
 
-        //REMEMBER to remove your user id and password before submitting your code!!
+        //DONT PUT THE USER AND PASSWORD ON GITHUB PLS
         String your_userid = System.getenv("DB421_USER");
         String your_password = System.getenv("DB421_PASSWORD");
-        //AS AN ALTERNATIVE, you can just set your password in the shell environment in the Unix (as shown below) and read it from there.
-        //$  export SOCSPASSWD=yoursocspasswd 
         if(your_userid == null && (your_userid = System.getenv("SOCSUSER")) == null)
         {
           System.err.println("Error!! do not have a password to connect to the database!");
@@ -41,26 +41,7 @@ class simpleJDBC
         Connection con = DriverManager.getConnection (url,your_userid,your_password) ;
         Statement statement = con.createStatement ( ) ;
 
-        // Creating a table
-//        try
-//        {
-//          String createSQL = "CREATE TABLE " + tableName + " (id INTEGER, name VARCHAR (25)) ";
-//          System.out.println (createSQL ) ;
-//          statement.executeUpdate (createSQL ) ;
-//          System.out.println ("DONE");
-//        }
-//        catch (SQLException e)
-//        {
-//          sqlCode = e.getErrorCode(); // Get SQLCODE
-//          sqlState = e.getSQLState(); // Get SQLSTATE
-//
-//          // Your code to handle errors comes here;
-//          // something more meaningful than a print would be good
-//          System.out.println("Code: " + sqlCode + "  sqlState: " + sqlState);
-//          System.out.println(e);
-//         }
-
-        // Inserting Data into the table
+        /// INSERT EXAMPLE
 //        try
 //        {
 //          String insertSQL = "INSERT INTO " + tableName + " VALUES ( 1 , \'Vicki\' ) " ;
@@ -83,40 +64,38 @@ class simpleJDBC
 //          sqlCode = e.getErrorCode(); // Get SQLCODE
 //          sqlState = e.getSQLState(); // Get SQLSTATE
 //
+//          System.out.println("Code: " + sqlCode + "  sqlState: " + sqlState);
+//          System.out.println(e);
+//        }
+
+        ///  Query Example
+//        try
+//        {
+//          String querySQL = "SELECT BOOKING_ID, AMOUNT FROM BOOKING";
+//          System.out.println (querySQL) ;
+//          java.sql.ResultSet rs = statement.executeQuery ( querySQL ) ;
+//
+//          while ( rs.next ( ) )
+//          {
+//            int id = rs.getInt ( 1 ) ;
+//            String amt = rs.getString (2);
+//            System.out.println ("id:  " + id);
+//            System.out.println ("amount:  " + amt);
+//          }
+//         System.out.println ("DONE");
+//        }
+//        catch (SQLException e)
+//        {
+//          sqlCode = e.getErrorCode(); // Get SQLCODE
+//          sqlState = e.getSQLState(); // Get SQLSTATE
+//
 //          // Your code to handle errors comes here;
 //          // something more meaningful than a print would be good
 //          System.out.println("Code: " + sqlCode + "  sqlState: " + sqlState);
 //          System.out.println(e);
 //        }
 
-        // Querying a table
-        try
-        {
-          String querySQL = "SELECT BOOKING_ID, AMOUNT FROM BOOKING";
-          System.out.println (querySQL) ;
-          java.sql.ResultSet rs = statement.executeQuery ( querySQL ) ;
-
-          while ( rs.next ( ) )
-          {
-            int id = rs.getInt ( 1 ) ;
-            String amt = rs.getString (2);
-            System.out.println ("id:  " + id);
-            System.out.println ("amount:  " + amt);
-          }
-         System.out.println ("DONE");
-        }
-        catch (SQLException e)
-        {
-          sqlCode = e.getErrorCode(); // Get SQLCODE
-          sqlState = e.getSQLState(); // Get SQLSTATE
-                
-          // Your code to handle errors comes here;
-          // something more meaningful than a print would be good
-          System.out.println("Code: " + sqlCode + "  sqlState: " + sqlState);
-          System.out.println(e);
-        }
-
-      //Updating a table
+      ///  Update Table Example
 //      try
 //      {
 //        String updateSQL = "UPDATE " + tableName + " SET NAME = \'Mimi\' WHERE id = 3";
@@ -163,12 +142,101 @@ class simpleJDBC
             String date;
             String service;
             int booking_id;
+            String querySQL;
 
             switch (choice) {
 
                 case 1:
-                    /// i lowkey dont remember who this is
+                    /// santi
                     System.out.println("\n--- View and/or Process Booking Requests ---");
+
+                    System.out.printf("%-12s %-12s %-8s %-10s %-15s%n",
+                            "BookingID", "Date", "Amount", "Status", "Payment");
+                    System.out.println("-------------------------------------------------------------");
+
+                    //step 1: query and show bookings that have "pending" as their status
+                    querySQL = "SELECT * FROM BOOKING WHERE UPPER(STATUS) = 'PENDING' ";
+                    HashSet<Integer> validBookingIds = new HashSet<>();
+                    try{
+                        java.sql.ResultSet rs = statement.executeQuery(querySQL);
+                        while( rs.next() ){
+                            int bookingId = rs.getInt("BOOKING_ID");
+                            validBookingIds.add(bookingId);
+                            String bookingDate = rs.getString("BOOKING_DATE");
+                            int amount = rs.getInt("AMOUNT");
+                            String status = rs.getString("STATUS");
+                            String paymentMethod = rs.getString("PAYMENT_METHOD");
+                            System.out.printf("%-12d %-12s %-8d %-10s %-15s%n",
+                                    bookingId, bookingDate, amount, status, paymentMethod);
+                        }
+                        //step 2: ask user what booking id to select
+                        System.out.println("Select BookingID: ");
+                        int selection = scanner.nextInt();
+                        while(!validBookingIds.contains(selection)){
+                            System.out.println("Non valid BookingID selected, Please enter a valid BookingId");
+                            selection = scanner.nextInt();
+                        }
+
+                        //step 2.5: show the booking again on the console for clarity
+                        querySQL = "SELECT * FROM BOOKING WHERE BOOKING_ID="+selection;
+                        rs = statement.executeQuery(querySQL);
+                        System.out.printf("%-12s %-12s %-8s %-10s %-15s%n",
+                                "BookingID", "Date", "Amount", "Status", "Payment");
+                        System.out.println("-------------------------------------------------------------");
+                        if (rs.next()) {
+                            String bookingId = rs.getString("BOOKING_ID");
+                            String bookingDate = rs.getString("BOOKING_DATE");
+                            int amount = rs.getInt("AMOUNT");
+                            String status = rs.getString("STATUS");
+                            String paymentMethod = rs.getString("PAYMENT_METHOD");
+
+                            System.out.printf("%-12s %-12s %-8d %-10s %-15s%n",
+                                    bookingId, bookingDate, amount, status, paymentMethod);
+                        } else {
+                            System.out.println("No booking found with that ID.");
+                        }
+
+                        //step 3: ask user what status to assign to the booking
+                        System.out.println("Select status to assign: \n1)Confirm\n2)Reject\n3)Reschedule\n0)Cancel operation");
+                        int secondSelection = scanner.nextInt();
+                        while(!validBookingIds.contains(selection)){
+                            System.out.println("Non valid status selected, Please enter a valid status");
+                            secondSelection = scanner.nextInt();
+                        }
+                        switch(secondSelection){
+                            case 1: //confirm
+                                querySQL = "UPDATE BOOKING SET STATUS='CONFIRMED' WHERE BOOKING_ID="+selection;
+                                break;
+                            case 2: //reject
+                                querySQL = "UPDATE BOOKING SET STATUS='REJECTED' WHERE BOOKING_ID="+selection;
+                                break;
+                            case 3: //reschedule
+                                querySQL = "UPDATE BOOKING SET STATUS='RESCHEDULE' WHERE BOOKING_ID="+selection;
+                                break;
+                            case 0: //quit from option
+                                break;
+                        }
+                        if(secondSelection!=0) {
+                            statement.execute(querySQL);
+                            System.out.println("BookingID " + selection + " was successfully updated.");
+                        }
+                        else{
+                            System.out.println("No changes were made.");
+                        }
+
+                    }
+                    catch (SQLException e)
+                    {
+                        sqlCode = e.getErrorCode(); // Get SQLCODE
+                        sqlState = e.getSQLState(); // Get SQLSTATE
+
+                        // Your code to handle errors comes here;
+                        // something more meaningful than a print would be good
+                        System.out.println("Code: " + sqlCode + "  sqlState: " + sqlState);
+                        System.out.println(e);
+                    }
+                    break;
+
                 case 2:
                     /// Elisha (Option 2)
                     System.out.println("\n--- Creating New Booking ---");
