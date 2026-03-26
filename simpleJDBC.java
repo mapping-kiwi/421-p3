@@ -367,6 +367,7 @@ class simpleJDBC
             String isAssigned = "SELECT * FROM isAssigned";
             printResultSet(statement.executeQuery(isAssigned));
 
+            statement.close ( ) ;
         }
         catch (SQLException e)
         {
@@ -375,6 +376,7 @@ class simpleJDBC
             System.out.println("Code: " + sqlCode + "  sqlState: " + sqlState);
             System.out.println(e);
         }
+
     }
 
     // HELPER FUNCTIONS we can all use
