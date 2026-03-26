@@ -251,7 +251,7 @@ class simpleJDBC
                     break;
 
                 case 3:
-                    assignEmployeesToSlots(scanner, con, statement);
+                    assignEmployeesToSlots(scanner, con);
                     break;
 
                 case 4:
@@ -304,10 +304,12 @@ class simpleJDBC
       con.close ( ) ;
     }
 
-    private static void assignEmployeesToSlots(Scanner scanner, Connection con, Statement statement) {        
+    private static void assignEmployeesToSlots(Scanner scanner, Connection con) {        
         System.out.println("\n--- Assigning Staff To a Booking ---");
-
+        
         try {        
+            Statement statement = con.createStatement ( ) ;
+
             //1. Display unassigned booked slots
             String unassigned_slots = "SELECT * FROM CalendarSlot WHERE status = 'Taken' AND slot_id NOT IN (SELECT slot_id FROM isAssigned)";
             java.sql.ResultSet rs_unassigned_slots = statement.executeQuery(unassigned_slots);
