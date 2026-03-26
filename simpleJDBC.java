@@ -132,7 +132,7 @@ class simpleJDBC
             System.out.println("3) Assign Staff to a Booking");
             System.out.println("4) Reschedule a Booking");
             System.out.println("5) View Operational Insights Dashboard");
-            System.out.println("0) Exit");
+            System.out.println("6) Exit");
             System.out.print("Enter your choice: ");
 
             choice = scanner.nextInt();
@@ -157,7 +157,7 @@ class simpleJDBC
                     //step 1: query and show bookings that have "pending" as their status
                     querySQL = "SELECT * FROM BOOKING WHERE UPPER(STATUS) = 'PENDING' ";
                     HashSet<Integer> validBookingIds = new HashSet<>();
-                    try{
+                    try {
                         java.sql.ResultSet rs = statement.executeQuery(querySQL);
                         while( rs.next() ){
                             int bookingId = rs.getInt("BOOKING_ID");
@@ -251,12 +251,7 @@ class simpleJDBC
                     break;
 
                 case 3:
-                    System.out.println("\n--- Assigning Staff To a Booking ---");
-                    /// query all bookings
-                    /// or enter bookings nb? depends how we want to implement it
-                    booking_id  = scanner.nextInt();
-                    ///  query employees available at a specific session
-                    /// Update DB
+                    assignEmployeesToSlots(scanner, con, statement);
                     break;
 
                 case 4:
@@ -307,5 +302,103 @@ class simpleJDBC
       // Finally but importantly close the statement and connection
       statement.close ( ) ;
       con.close ( ) ;
+    }
+
+    private static void assignEmployeesToSlots(Scanner scanner, Connection con, Statement statement) {        
+        System.out.println("\n--- Assigning Staff To a Booking ---");
+
+        try {        
+            //1. Display unassigned booked slots
+            String unassigned_slots = "SELECT * FROM CalendarSlot WHERE status = 'Taken' AND slot_id NOT IN (SELECT slot_id FROM isAssigned)";
+            java.sql.ResultSet rs_unassigned_slots = statement.executeQuery(unassigned_slots);
+            printResultSet(rs_unassigned_slots);
+            
+            //2. Retrieve slot_ids
+            HashSet<Integer> validSlotIds = new HashSet<>();            
+            while( rs_unassigned_slots.next() ) {
+                int slotId = rs_unassigned_slots.getInt("SLOT_ID");
+                validSlotIds.add(slotId);
+            }
+
+            //3. Ask user to select a slot_id
+            System.out.println("Select SlotID: ");
+            int slot_selected = scanner.nextInt();
+            //Make sure it exists
+            while(!validSlotIds.contains(slot_selected)){
+                System.out.println("Invalid SlotID selected. Please enter a valid SlotID.");
+                slot_selected = scanner.nextInt();
+            }
+            
+            //4. Display all available employees for that slot
+            String available_employees = "SELECT E.name, E.employee_no\r\n" + //
+                                        "FROM isAssigned A\r\n" + //
+                                        "JOIN Employee E ON A.employee_no = E.employee_no\r\n" + //
+                                        "JOIN CalendarSlot S ON A.slot_id = S.slot_id\r\n" + //
+                                        //Either the employee's current slots fall before or after the slot selected
+                                        "WHERE (A.start_time < ?.start_time AND A.end_time < ?.start_time) OR (A.start_time > ?.end_time AND A.end_time > ?.end_time);";
+            java.sql.ResultSet rs_available_employees = statement.executeQuery(available_employees);
+            printResultSet(rs_available_employees);
+            //Bind ? placeholder to its value
+            PreparedStatement pstmt_employees = con.prepareStatement(available_employees);
+            pstmt_employees.setInt(1, slot_selected);
+
+            //5. Retrieve employee_nos
+            HashSet<Integer> validEmployeeNos = new HashSet<>();            
+            while( rs_available_employees.next() ) {
+                int employeeNo = rs_available_employees.getInt("EMPLOYEE_NO");
+                validEmployeeNos.add(employeeNo);
+            }
+
+            //6. Ask user to select an employee to assign to the slot
+            System.out.println("Select EmployeeNo of employee to assign: ");
+            int employeeNo_selected = scanner.nextInt();
+            //Make sure it exists
+            while(!validEmployeeNos.contains(employeeNo_selected)){
+                System.out.println("Invalid EmployeeNo selected. Please enter a valid EmployeeNo.");
+                employeeNo_selected = scanner.nextInt();
+            }
+
+            //7. Assign employee to slot in DB isAssigned table
+            String assignment = "INSERT INTO isAssigned VALUES (?,?)";
+            //Bind ? placeholders to their values
+            PreparedStatement pstmt_assignment = con.prepareStatement(assignment);
+            pstmt_assignment.setInt(1, slot_selected);
+            pstmt_assignment.setInt(2, employeeNo_selected);
+
+            //8. TEST: Display isAssigned table
+            System.out.println("Updated isAssigned table: ");
+            String isAssigned = "SELECT * FROM isAssigned";
+            java.sql.ResultSet rs_assigned_slots = statement.executeQuery(isAssigned);
+            printResultSet(rs_assigned_slots);
+
+        }
+        catch (SQLException e)
+        {
+            int sqlCode = e.getErrorCode(); 
+            String sqlState = e.getSQLState(); 
+            System.out.println("Code: " + sqlCode + "  sqlState: " + sqlState);
+            System.out.println(e);
+        }
+    }
+
+    //Generic function that takes any result set and outputs it as a table
+    //Could make it return a HashSet of an attribute passed to it as a parameter**
+    public static void printResultSet(ResultSet rs) throws SQLException {
+        ResultSetMetaData rsmd = rs.getMetaData();
+        int columnsNumber = rsmd.getColumnCount();
+
+        // Print column headers
+        for (int i = 1; i <= columnsNumber; i++) {
+            System.out.print(rsmd.getColumnName(i) + "\t");
+        }
+        System.out.println("\n-----------------------------------------------------------------------------");
+
+        // Print rows
+        while (rs.next()) {
+            for (int i = 1; i <= columnsNumber; i++) {
+                System.out.print(rs.getString(i) + "\t");
+            }
+            System.out.println();
+        }
     }
 }
