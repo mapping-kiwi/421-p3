@@ -1,8 +1,8 @@
 import com.ibm.db2.jcc.t4.ServerListEntry;
 
 import java.sql.* ;
-import java.util.HashSet;
-import java.util.Scanner;
+import java.util.*;
+import java.util.stream.Collectors;
 
 class simpleJDBC
 {
@@ -311,65 +311,59 @@ class simpleJDBC
             //1. Display unassigned booked slots
             String unassigned_slots = "SELECT * FROM CalendarSlot WHERE status = 'Taken' AND slot_id NOT IN (SELECT slot_id FROM isAssigned)";
             java.sql.ResultSet rs_unassigned_slots = statement.executeQuery(unassigned_slots);
-            printResultSet(rs_unassigned_slots);
-            
-            //2. Retrieve slot_ids
-            HashSet<Integer> validSlotIds = new HashSet<>();            
-            while( rs_unassigned_slots.next() ) {
-                int slotId = rs_unassigned_slots.getInt("SLOT_ID");
-                validSlotIds.add(slotId);
-            }
+            Set<Integer> unassigned_slot_ids = printAndCapture(rs_unassigned_slots, "SLOT_ID", Integer.class);
 
-            //3. Ask user to select a slot_id
+            //2. Ask user to select a slot_id
             System.out.println("Select SlotID: ");
             int slot_selected = scanner.nextInt();
             //Make sure it exists
-            while(!validSlotIds.contains(slot_selected)){
+            while(!unassigned_slot_ids.contains(slot_selected)){
                 System.out.println("Invalid SlotID selected. Please enter a valid SlotID.");
                 slot_selected = scanner.nextInt();
             }
             
-            //4. Display all available employees for that slot
-            String available_employees = "SELECT E.name, E.employee_no\r\n" + //
-                                        "FROM isAssigned A\r\n" + //
-                                        "JOIN Employee E ON A.employee_no = E.employee_no\r\n" + //
-                                        "JOIN CalendarSlot S ON A.slot_id = S.slot_id\r\n" + //
-                                        //Either the employee's current slots fall before or after the slot selected
-                                        "WHERE (A.start_time < ?.start_time AND A.end_time < ?.start_time) OR (A.start_time > ?.end_time AND A.end_time > ?.end_time);";
-            java.sql.ResultSet rs_available_employees = statement.executeQuery(available_employees);
-            printResultSet(rs_available_employees);
+            //3. Display all available employees for that slot
+            String available_employees = 
+                "SELECT E.name, E.employee_no " +
+                "FROM Employee E " +
+                "WHERE E.employee_no NOT IN (" +
+                "    SELECT A.employee_no " +
+                "    FROM isAssigned A " +
+                "    JOIN CalendarSlot S_Busy ON A.slot_id = S_Busy.slot_id " +
+                "    INNER JOIN CalendarSlot S_Sel ON S_Sel.slot_id = ? " + 
+                //same day
+                "    WHERE S_Busy.date = S_Sel.date " + 
+                //overlapping times
+                "    AND NOT (S_Busy.end_time <= S_Sel.start_time OR S_Busy.start_time >= S_Sel.end_time)" +
+                ")";
             //Bind ? placeholder to its value
             PreparedStatement pstmt_employees = con.prepareStatement(available_employees);
-            pstmt_employees.setInt(1, slot_selected);
-
-            //5. Retrieve employee_nos
-            HashSet<Integer> validEmployeeNos = new HashSet<>();            
-            while( rs_available_employees.next() ) {
-                int employeeNo = rs_available_employees.getInt("EMPLOYEE_NO");
-                validEmployeeNos.add(employeeNo);
-            }
-
-            //6. Ask user to select an employee to assign to the slot
+            pstmt_employees.setInt(1, slot_selected);                        
+            //Execute query and print table
+            java.sql.ResultSet rs_available_employees = pstmt_employees.executeQuery();
+            Set<Integer> available_employee_nos = printAndCapture(rs_available_employees, "EMPLOYEE_NO", Integer.class);
+            
+            //4. Ask user to select an employee to assign to the slot
             System.out.println("Select EmployeeNo of employee to assign: ");
             int employeeNo_selected = scanner.nextInt();
             //Make sure it exists
-            while(!validEmployeeNos.contains(employeeNo_selected)){
+            while(!available_employee_nos.contains(employeeNo_selected)){
                 System.out.println("Invalid EmployeeNo selected. Please enter a valid EmployeeNo.");
                 employeeNo_selected = scanner.nextInt();
             }
 
-            //7. Assign employee to slot in DB isAssigned table
+            //5. Assign employee to slot in DB isAssigned table
             String assignment = "INSERT INTO isAssigned VALUES (?,?)";
             //Bind ? placeholders to their values
             PreparedStatement pstmt_assignment = con.prepareStatement(assignment);
             pstmt_assignment.setInt(1, slot_selected);
             pstmt_assignment.setInt(2, employeeNo_selected);
+            pstmt_assignment.executeUpdate();
 
-            //8. TEST: Display isAssigned table
+            //6. Display updated isAssigned table
             System.out.println("Updated isAssigned table: ");
             String isAssigned = "SELECT * FROM isAssigned";
-            java.sql.ResultSet rs_assigned_slots = statement.executeQuery(isAssigned);
-            printResultSet(rs_assigned_slots);
+            printResultSet(statement.executeQuery(isAssigned));
 
         }
         catch (SQLException e)
@@ -381,8 +375,9 @@ class simpleJDBC
         }
     }
 
-    //Generic function that takes any result set and outputs it as a table
-    //Could make it return a HashSet of an attribute passed to it as a parameter**
+    // HELPER FUNCTIONS we can all use
+
+    //Takes any result set and outputs it as a table
     public static void printResultSet(ResultSet rs) throws SQLException {
         ResultSetMetaData rsmd = rs.getMetaData();
         int columnsNumber = rsmd.getColumnCount();
@@ -401,4 +396,38 @@ class simpleJDBC
             System.out.println();
         }
     }
+
+    //Print table and populate a set of the attribute/column passed as a parameter
+    public static <T> Set<T> printAndCapture(ResultSet rs, String targetColumn, Class<T> type) throws SQLException {
+        ResultSetMetaData rsmd = rs.getMetaData();
+        int columnsNumber = rsmd.getColumnCount();
+        Set<T> attributeSet = new HashSet<>();
+
+        // 1. Print Header
+        for (int i = 1; i <= columnsNumber; i++) {
+            System.out.print(rsmd.getColumnName(i).toUpperCase() + "\t");
+        }
+        System.out.println("\n" + "-".repeat(70));
+
+        // 2. Process Rows
+        while (rs.next()) {
+            for (int i = 1; i <= columnsNumber; i++) {
+                String colName = rsmd.getColumnName(i);
+                Object value = rs.getObject(i);
+
+                // Print the value for the table display
+                System.out.print(value + "\t");
+
+                // If this is our target column, add it to our Set
+                if (colName.equalsIgnoreCase(targetColumn) && value != null) {
+                    // type.cast ensures the Object is actually of type T
+                    attributeSet.add(type.cast(value));
+                }
+            }
+            System.out.println();
+        }
+        
+        return attributeSet;
+    }
+    
 }
