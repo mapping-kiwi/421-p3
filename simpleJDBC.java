@@ -325,26 +325,35 @@ class simpleJDBC
             }
             
             //3. Display all available employees for that slot
-            String available_employees = 
-                "SELECT E.name, E.employee_no " +
-                "FROM Employee E " +
-                "WHERE E.employee_no NOT IN (" +
-                "    SELECT A.employee_no " +
-                "    FROM isAssigned A " +
-                "    JOIN CalendarSlot S_Busy ON A.slot_id = S_Busy.slot_id " +
-                "    INNER JOIN CalendarSlot S_Sel ON S_Sel.slot_id = ? " + 
-                //same day
-                "    WHERE S_Busy.date = S_Sel.date " + 
-                //overlapping times
-                "    AND NOT (S_Busy.end_time <= S_Sel.start_time OR S_Busy.start_time >= S_Sel.end_time)" +
-                ")";
-            //Bind ? placeholder to its value
-            PreparedStatement pstmt_employees = con.prepareStatement(available_employees);
-            pstmt_employees.setInt(1, slot_selected);                        
-            //Execute query and print table
-            java.sql.ResultSet rs_available_employees = pstmt_employees.executeQuery();
-            Set<Integer> available_employee_nos = printAndCapture(rs_available_employees, "EMPLOYEE_NO", Integer.class);
+            // String available_employees = 
+            //     "SELECT E.name, E.employee_no " +
+            //     "FROM Employee E " +
+            //     "WHERE E.employee_no NOT IN (" +
+            //     "    SELECT A.employee_no " +
+            //     "    FROM isAssigned A " +
+            //     "    JOIN CalendarSlot S_Busy ON A.slot_id = S_Busy.slot_id " +
+            //     "    INNER JOIN CalendarSlot S_Sel ON S_Sel.slot_id = ? " + 
+            //     //same day
+            //     "    WHERE S_Busy.date = S_Sel.date " + 
+            //     //overlapping times
+            //     "    AND NOT (S_Busy.end_time <= S_Sel.start_time OR S_Busy.start_time >= S_Sel.end_time)" +
+            //     ")";
+            // //Bind ? placeholder to its value
+            // PreparedStatement pstmt_employees = con.prepareStatement(available_employees);
+            // pstmt_employees.setInt(1, slot_selected);                        
+            // //Execute query and print table
+            // java.sql.ResultSet rs_available_employees = pstmt_employees.executeQuery();
+            // Set<Integer> available_employee_nos = printAndCapture(rs_available_employees, "EMPLOYEE_NO", Integer.class);
             
+            //3. Retrieve available employees by calling stored procedure GetEligible Employees
+            CallableStatement cstmt_employees = con.prepareCall("{call GetEligibleEmployees(?)}");
+            cstmt_employees.setInt(1,slot_selected);
+            cstmt_employees.execute();
+            java.sql.ResultSet rs_eligible_employees = cstmt_employees.getResultSet();
+            //Display them as a table
+            Set<Integer> available_employee_nos = printAndCapture(rs_eligible_employees, "EMPLOYEE_NO", Integer.class);
+
+
             //4. Ask user to select an employee to assign to the slot
             System.out.println("Select EmployeeNo of employee to assign: ");
             int employeeNo_selected = scanner.nextInt();
