@@ -1,4 +1,5 @@
 import java.sql.* ;
+import java.sql.Date;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -127,7 +128,7 @@ class simpleJDBC
             System.out.println("\n===== DataBass Dashboard =====");
             System.out.println("1) View and/or Process Booking Requests");
             System.out.println("2) Create a new booking");
-            System.out.println("3) Assign Staff to a Booking");
+            System.out.println("3) Assign Employee to a Booked Time Slot");
             System.out.println("4) Reschedule a Booking");
             System.out.println("5) View Operational Insights Dashboard");
             System.out.println("6) Exit");
@@ -227,8 +228,6 @@ class simpleJDBC
                         sqlCode = e.getErrorCode(); // Get SQLCODE
                         sqlState = e.getSQLState(); // Get SQLSTATE
 
-                        // Your code to handle errors comes here;
-                        // something more meaningful than a print would be good
                         System.out.println("Code: " + sqlCode + "  sqlState: " + sqlState);
                         System.out.println(e);
                     }
@@ -380,29 +379,7 @@ class simpleJDBC
                     break;
 
                 case 5:
-                    System.out.println("\n--- Operational Insights ---");
-                    int nestedChoice;
-                    System.out.println("\n1) View Bookings By Service");
-                    System.out.println("\n2) View Studio Utilization");
-                    System.out.println("\n3) View Employee Workload");
-                    System.out.println("\n4) View Busiest Working Periods");
-                    nestedChoice = scanner.nextInt();
-                    switch(nestedChoice){
-                        case 1:
-                            System.out.println("\n--- Bookings By Service ---");
-                            break;
-                        case 2:
-                            System.out.println("\n--- Studio Utilization ---");
-                            break;
-                        case 3:
-                            System.out.println("\n--- Employee Workload ---");
-                            break;
-                        case 4:
-                            System.out.println("\n--- Busy Working Periods ---");
-                            break;
-                        default:
-                            System.out.println("Invalid Option Selected");
-                    }
+                    operationalInsights(scanner, con);
                     break;
                 case 0:
                     System.out.println("Exiting...");
@@ -420,17 +397,17 @@ class simpleJDBC
       con.close ( ) ;
     }
 
+    //Menu option 3
     private static void assignEmployeesToSlots(Scanner scanner, Connection con) {        
-        System.out.println("\n--- Assigning Staff To a Booking ---");
+        System.out.println("\n--- Assign Employee to a Booked Time Slot ---");
         
         try {        
             Statement statement = con.createStatement ( ) ;
 
-            //1. Display unassigned EmployeePosition booked slots
+            //1. Display unassigned booked slots offering EmployeePosition services
             String unassigned_slots = 
                 "SELECT * FROM CalendarSlot C " +
-                //Service is an EmployeePosition
-                //USING tells DB to merge duplicate service_id columns into one
+                //Service is an EmployeePosition. USING tells DB to merge duplicate service_id columns into one.
                 "JOIN EmployeePosition E USING (service_id) " +
                 //Booked 
                 "WHERE status = 'Taken' " +
@@ -457,7 +434,6 @@ class simpleJDBC
             //Display them as a table
             Set<Integer> available_employee_nos = printAndCapture(rs_eligible_employees, "EMPLOYEE_NO", Integer.class);
 
-
             //4. Ask user to select an employee to assign to the slot
             System.out.println("Select EmployeeNo of employee to assign: ");
             int employeeNo_selected = scanner.nextInt();
@@ -475,10 +451,12 @@ class simpleJDBC
             pstmt_assignment.setInt(2, employeeNo_selected);
             pstmt_assignment.executeUpdate();
 
-            //6. Display updated isAssigned table
-            System.out.println("Updated isAssigned table: ");
-            String isAssigned = "SELECT * FROM isAssigned";
-            printResultSet(statement.executeQuery(isAssigned));
+            //6. Display all the employee's assigned slots
+            System.out.println("Current assignments for Employee " + employeeNo_selected + ": ");
+            String selected_employee_assigns = "SELECT * FROM isAssigned WHERE employee_no = ?";
+            PreparedStatement pstmt_view = con.prepareStatement(selected_employee_assigns);
+            pstmt_view.setInt(1, employeeNo_selected);
+            printResultSet(pstmt_view.executeQuery());
 
             statement.close ( ) ;
         }
@@ -489,7 +467,65 @@ class simpleJDBC
             System.out.println("Code: " + sqlCode + "  sqlState: " + sqlState);
             System.out.println(e);
         }
+    }
+    
+    //Menu Option 5
+    private static void operationalInsights(Scanner scanner, Connection con) {        
+        System.out.println("\n--- Operational Insights ---");
+        
+        int nestedChoice;
+        System.out.println("1) View Bookings By Service");
+        System.out.println("2) View Studio Utilization");
+        System.out.println("3) View Employee Workload");
+        System.out.println("4) View Busiest Working Periods");
+        System.out.print("Enter your choice: ");
+        nestedChoice = scanner.nextInt();
 
+        switch(nestedChoice){
+            case 1:
+                System.out.println("\n--- Bookings By Service ---");
+                break;
+            case 2:
+                System.out.println("\n--- Studio Utilization ---");
+                break;
+            case 3:
+                employeeWorkload(scanner, con);
+                break;
+            case 4:
+                System.out.println("\n--- Busy Working Periods ---");
+                break;
+            default:
+                System.out.println("Invalid Option Selected");
+        }
+    }
+
+    //Menu option 5 sub-option 3
+    private static void employeeWorkload(Scanner scanner, Connection con) {
+        System.out.println("\n--- Employee Workload ---");
+
+        try {
+            Statement statement = con.createStatement ( ) ;
+            
+            //DB optimizer sees I am joining Employee to isAssigned using employee_no --> uses the INDEX instead of searching the whole table row by row
+            String employee_workload = 
+                "SELECT E.name, COUNT(A.slot_id) AS total_bookings, " +
+                    "SUM(HOUR(S.end_time - S.start_time)) AS total_hours " +
+                "FROM Employee E " +
+                "JOIN isAssigned A ON E.employee_no = A.employee_no " +
+                "JOIN CalendarSlot S ON A.slot_id = S.slot_id " +
+                "GROUP BY E.name";
+                ;
+            java.sql.ResultSet rs_employee_workload = statement.executeQuery(employee_workload);
+            printResultSet(rs_employee_workload);
+        }
+
+        catch (SQLException e)
+        {
+            int sqlCode = e.getErrorCode(); 
+            String sqlState = e.getSQLState(); 
+            System.out.println("Code: " + sqlCode + "  sqlState: " + sqlState);
+            System.out.println(e);
+        }        
     }
 
     // HELPER FUNCTIONS we can all use
