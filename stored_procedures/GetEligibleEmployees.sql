@@ -3,16 +3,17 @@
 CREATE PROCEDURE GetEligibleEmployees (IN selected_slot_id INT)
 DYNAMIC RESULT SETS 1
 BEGIN
+    DECLARE v_service_id INT;   
     DECLARE cursor1 CURSOR WITH RETURN FOR
 
     SELECT E.name, E.employee_no
     FROM Employee E
-    -- 1. Ensure employee has the right specialty
+    -- 2. Ensure employee has the right specialty
     JOIN occupies O ON E.employee_no = O.employee_no
     JOIN CalendarSlot S_Target ON S_Target.slot_id = selected_slot_id
     WHERE O.service_id = S_Target.service_id
 
-    -- 2. Ensure they aren't busy during timeslot
+    -- 3. Ensure they aren't busy during timeslot
     AND E.employee_no NOT IN (
         SELECT A.employee_no
         FROM isAssigned A
@@ -23,5 +24,15 @@ BEGIN
         AND NOT (S_Busy.end_time <= S_Target.start_time OR S_Busy.start_time >= S_Target.end_time)
     );
 
-    OPEN cursor1;
+    -- 1. Before anything, check if the slot's service is an EmployeePosition
+    IF EXISTS (
+        SELECT 1 
+        FROM CalendarSlot C
+        JOIN EmployeePosition E ON C.service_id = E.service_id
+        WHERE C.slot_id = selected_slot_id
+    ) THEN
+        --Success: open cursor and move to step 2
+        OPEN cursor1;
+    --Failure: Don't return anything
+    END IF;
 END @

@@ -310,8 +310,17 @@ class simpleJDBC
         try {        
             Statement statement = con.createStatement ( ) ;
 
-            //1. Display unassigned booked slots
-            String unassigned_slots = "SELECT * FROM CalendarSlot WHERE status = 'Taken' AND slot_id NOT IN (SELECT slot_id FROM isAssigned)";
+            //1. Display unassigned EmployeePosition booked slots
+            String unassigned_slots = 
+                "SELECT * FROM CalendarSlot C " +
+                //Service is an EmployeePosition
+                //USING tells DB to merge duplicate service_id columns into one
+                "JOIN EmployeePosition E USING (service_id) " +
+                //Booked 
+                "WHERE status = 'Taken' " +
+                //Not already assigned to an employee
+                "AND slot_id NOT IN (SELECT slot_id FROM isAssigned)"
+                ;
             java.sql.ResultSet rs_unassigned_slots = statement.executeQuery(unassigned_slots);
             Set<Integer> unassigned_slot_ids = printAndCapture(rs_unassigned_slots, "SLOT_ID", Integer.class);
 
@@ -323,27 +332,6 @@ class simpleJDBC
                 System.out.println("Invalid SlotID selected. Please enter a valid SlotID.");
                 slot_selected = scanner.nextInt();
             }
-            
-            //3. Display all available employees for that slot
-            // String available_employees = 
-            //     "SELECT E.name, E.employee_no " +
-            //     "FROM Employee E " +
-            //     "WHERE E.employee_no NOT IN (" +
-            //     "    SELECT A.employee_no " +
-            //     "    FROM isAssigned A " +
-            //     "    JOIN CalendarSlot S_Busy ON A.slot_id = S_Busy.slot_id " +
-            //     "    INNER JOIN CalendarSlot S_Sel ON S_Sel.slot_id = ? " + 
-            //     //same day
-            //     "    WHERE S_Busy.date = S_Sel.date " + 
-            //     //overlapping times
-            //     "    AND NOT (S_Busy.end_time <= S_Sel.start_time OR S_Busy.start_time >= S_Sel.end_time)" +
-            //     ")";
-            // //Bind ? placeholder to its value
-            // PreparedStatement pstmt_employees = con.prepareStatement(available_employees);
-            // pstmt_employees.setInt(1, slot_selected);                        
-            // //Execute query and print table
-            // java.sql.ResultSet rs_available_employees = pstmt_employees.executeQuery();
-            // Set<Integer> available_employee_nos = printAndCapture(rs_available_employees, "EMPLOYEE_NO", Integer.class);
             
             //3. Retrieve available employees by calling stored procedure GetEligible Employees
             CallableStatement cstmt_employees = con.prepareCall("{call GetEligibleEmployees(?)}");
@@ -390,21 +378,20 @@ class simpleJDBC
 
     // HELPER FUNCTIONS we can all use
 
-    //Takes any result set and outputs it as a table
     public static void printResultSet(ResultSet rs) throws SQLException {
         ResultSetMetaData rsmd = rs.getMetaData();
         int columnsNumber = rsmd.getColumnCount();
 
-        // Print column headers
+        // Print column headers with fixed width (e.g., 18 characters)
         for (int i = 1; i <= columnsNumber; i++) {
-            System.out.print(rsmd.getColumnName(i) + "\t");
+            System.out.printf("%-18s", rsmd.getColumnName(i));
         }
-        System.out.println("\n-----------------------------------------------------------------------------");
+        System.out.println("\n" + "-".repeat(columnsNumber * 18));
 
         // Print rows
         while (rs.next()) {
             for (int i = 1; i <= columnsNumber; i++) {
-                System.out.print(rs.getString(i) + "\t");
+                System.out.printf("%-18s", rs.getString(i));
             }
             System.out.println();
         }
@@ -418,7 +405,7 @@ class simpleJDBC
 
         // 1. Print Header
         for (int i = 1; i <= columnsNumber; i++) {
-            System.out.print(rsmd.getColumnName(i).toUpperCase() + "\t");
+            System.out.printf("%-18s", rsmd.getColumnName(i).toUpperCase());
         }
         System.out.println("\n" + "-".repeat(70));
 
@@ -429,7 +416,7 @@ class simpleJDBC
                 Object value = rs.getObject(i);
 
                 // Print the value for the table display
-                System.out.print(value + "\t");
+                System.out.printf("%-18s", value);
 
                 // If this is our target column, add it to our Set
                 if (colName.equalsIgnoreCase(targetColumn) && value != null) {
