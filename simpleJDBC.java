@@ -517,6 +517,8 @@ class simpleJDBC
                 ;
             java.sql.ResultSet rs_employee_workload = statement.executeQuery(employee_workload);
             printResultSet(rs_employee_workload);
+
+            statement.close();
         }
 
         catch (SQLException e)
