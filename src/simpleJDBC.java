@@ -320,7 +320,7 @@ class simpleJDBC
             Set<Integer> validBookingIds = printAndCapture(rs, "BOOKING_ID", Integer.class);
 
             //step 2: ask user what booking id to select
-            System.out.println("Select BookingID: ");
+            System.out.print("Select BookingID: ");
             int selection = scanner.nextInt();
             while(!validBookingIds.contains(selection)){
                 System.out.println("Invalid BookingID selected, Please enter a valid BookingId");
@@ -333,7 +333,7 @@ class simpleJDBC
             printResultSet(rs);
 
             //step 3: ask user what status to assign to the booking
-            System.out.println("Select status to assign: \n1)Confirm\n2)Reject\n3)Reschedule\n0)Cancel operation");
+            System.out.print("Select status to assign: \n1)Confirm\n2)Reject\n3)Reschedule\n0)Cancel operation\nselection: ");
             int secondSelection = scanner.nextInt();
             while(!validBookingIds.contains(selection)){
                 System.out.println("Invalid status selected, Please enter a valid status");
@@ -342,11 +342,14 @@ class simpleJDBC
             switch(secondSelection){
                 case 1: //confirm
                     querySQL = "UPDATE BOOKING SET BOOKING_STATUS='APPROVED' WHERE BOOKING_ID="+selection;
+                    querySQL = "UPDATE BOOKING SET BOOKING_STATUS='APPROVED' WHERE BOOKING_ID="+selection;
                     break;
                 case 2: //reject
                     querySQL = "UPDATE BOOKING SET BOOKING_STATUS='CANCELLED' WHERE BOOKING_ID="+selection;
+                    querySQL = "UPDATE BOOKING SET BOOKING_STATUS='CANCELLED' WHERE BOOKING_ID="+selection;
                     break;
                 case 3: //reschedule
+                    querySQL = "UPDATE BOOKING SET BOOKING_STATUS='TO_RESCHEDULE' WHERE BOOKING_ID="+selection;
                     querySQL = "UPDATE BOOKING SET BOOKING_STATUS='TO_RESCHEDULE' WHERE BOOKING_ID="+selection;
                     break;
                 case 0: //quit from option
@@ -665,6 +668,48 @@ class simpleJDBC
                 break;
             default:
                 System.out.println("Invalid Option Selected");
+        }
+    }
+
+    //Menu option 5 sub-option 2
+    private static void studioUtilization(Scanner scanner, Connection con){
+
+        try{
+            //step 1: query our studios and store them in a hashset(?)
+                //actually might be easier to have a hashmap (serviceId, roomID) for searching purposes
+            String querySQL = "SELECT SERVICE_ID, ROOM_NO FROM STUDIOROOM";
+            //HashSet<Integer> studioRooms = new HashSet<>();
+            HashMap<Integer, Integer> studioRooms = new HashMap<>();
+            Statement statement = con.createStatement();
+            java.sql.ResultSet rs = statement.executeQuery(querySQL);
+            while(rs.next()){
+                int serviceId = rs.getInt("SERVICE_ID");
+                int roomNo = rs.getInt("ROOM_NO");
+                studioRooms.put(serviceId, roomNo);
+            }
+
+            //step 2: we should be able to query for a specific roomNo to see its utilization
+            for(int key : studioRooms.keySet()){
+                int offers = 0;
+                int takenOffers = 0;
+                querySQL = "SELECT * FROM CALENDARSLOT WHERE SERVICE_ID="+key;
+                rs = statement.executeQuery(querySQL);
+                while (rs.next()){
+                    offers+=1;
+                    if(rs.getString("SLOT_STATUS").equals("TAKEN")){
+                        takenOffers+=1;
+                    }
+                }
+            }
+            //1st: get how often it is offered (count available and used)
+            //2nd: get how many times it actually is used
+
+        } catch (SQLException e) {
+            int sqlCode = e.getErrorCode();
+            String sqlState = e.getSQLState();
+
+            System.out.println("SQL Error — Code: " + sqlCode + "  State: " + sqlState);
+            System.out.println(e.getMessage());
         }
     }
 
