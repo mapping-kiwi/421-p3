@@ -692,10 +692,63 @@ class simpleJDBC
                 querySQL = "SELECT * FROM CALENDARSLOT WHERE SERVICE_ID="+key;
                 rs = statement.executeQuery(querySQL);
                 while (rs.next()){
+                    //free
                     offers+=1;
+                    //taken
                     if(rs.getString("SLOT_STATUS").equals("TAKEN")){
                         takenOffers+=1;
                     }
+                }
+
+                double capacity = (offers == 0) ? 0 : (takenOffers * 100.0) / offers;
+                System.out.printf(
+                        "Studio Room %s is at %.2f%% capacity (offers: %d | taken: %d | free: %d)%n",
+                        studioRooms.get(key),
+                        capacity,
+                        offers,
+                        takenOffers,
+                        (offers - takenOffers)
+                );
+
+                System.out.println("Select an option: \n1)See all slots\n2)See taken slots\n3)See all free slots\n0)Do Nothing");
+
+                int selection = scanner.nextInt();
+                while(selection>=1 && selection<=3){
+                    System.out.print("Invalid option chosen, try again: ");
+                    selection = scanner.nextInt();
+                }
+
+                switch(selection){
+                    case 1:
+                        querySQL = "SELECT * FROM CALENDARSLOT WHERE SERVICE_ID="+key;
+                        break;
+                    case 2:
+                        querySQL = "SELECT * FROM CALENDARSLOT WHERE SLOT_STATUS='TAKEN' AND SERVICE_ID="+key;
+                        break;
+                    case 3:
+                        querySQL = "SELECT * FROM CALENDARSLOT WHERE SLOT_STATUS='FREE' AND SERVICE_ID="+key;
+                        break;
+                    case 0:
+                        System.out.println("whoops");
+                }
+                if(selection!=0) {
+                    rs = statement.executeQuery(querySQL);
+
+                    System.out.println();
+
+                    while (rs.next()) {
+                        System.out.printf("%-10d %-12d %-12s %-12s %-12s %-12s%n",
+                                rs.getInt("SLOT_ID"),
+                                rs.getInt("SERVICE_ID"),
+                                rs.getString("DATE"),
+                                rs.getString("START_TIME"),
+                                rs.getString("END_TIME"),
+                                rs.getString("SLOT_STATUS")
+                        );
+                    }
+                }
+                else{
+                    System.out.println("No changes were made.");
                 }
             }
             //1st: get how often it is offered (count available and used)
