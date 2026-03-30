@@ -149,134 +149,7 @@ class simpleJDBC
 
                 case 2:
                     //elisha
-                    System.out.println("\n--- Creating New Booking ---");
-
-                    try {
-                        // 1 - Enter and validate customer with their ID
-                        System.out.print("Enter Customer ID: ");
-                        int customerId = scanner.nextInt();
-                        scanner.nextLine();
-
-                        // SQL query - Fetch the Customer ID from Customer table
-                        String clientCheckSQL = "SELECT COUNT(*) FROM CUSTOMER WHERE CUSTOMER_ID = ?";
-                        PreparedStatement clientStmt = con.prepareStatement(clientCheckSQL);
-                        clientStmt.setInt(1, customerId);
-                        ResultSet clientRS = clientStmt.executeQuery();
-                        clientRS.next();
-
-                        // If customer is new, add them to the system with all appropriate information
-                        if (clientRS.getInt(1) == 0) {
-                            System.out.println("Customer not found. Creating new customer...");
-
-                            System.out.print("Enter customer name: ");
-                            String name = scanner.nextLine();
-
-                            System.out.print("Enter customer email: ");
-                            String email = scanner.nextLine();
-
-                            System.out.print("Enter customer phone: ");
-                            String phone = scanner.nextLine();
-
-                            // Insert the new customer's info in the Customer table
-                            String insertClientSQL = "INSERT INTO CUSTOMER (CUSTOMER_ID, NAME, EMAIL, PHONE) VALUES (?, ?, ?, ?)";
-                            PreparedStatement insertClientStmt = con.prepareStatement(insertClientSQL);
-                            insertClientStmt.setInt(1, customerId);
-                            insertClientStmt.setString(2, name);
-                            insertClientStmt.setString(3, email);
-                            insertClientStmt.setString(4, phone);
-                            insertClientStmt.executeUpdate();
-                            insertClientStmt.close();
-                            System.out.println("New customer created. Welcome to DataBASS!");
-                        }
-                        clientStmt.close();
-
-                        // 2- Ask for desired date and find first available slot
-                        System.out.print("Enter desired date (YYYY-MM-DD): ");
-                        String dateInput = scanner.nextLine();
-
-                        // SQL statement - select the slot_id from CalendarSlot table where the slot has desired date and the availability is free.
-                        PreparedStatement slotStmt = con.prepareStatement(
-                                "SELECT SLOT_ID, DATE FROM CALENDARSLOT " +
-                                        "WHERE UPPER(STATUS) = 'FREE' AND DATE = ? " +
-                                        "FETCH FIRST 1 ROW ONLY");
-                        slotStmt.setDate(1, Date.valueOf(dateInput));
-                        ResultSet slotRS = slotStmt.executeQuery();
-
-                        // return if no slots are available.
-                        if (!slotRS.next()) {
-                            System.out.println("No available slots on " + dateInput + ". Please try another date.");
-                            slotStmt.close();
-                            break;
-                        }
-
-                        // Return message to the user after slot is assigned to the client.
-                        int chosenSlotId = slotRS.getInt("SLOT_ID");
-                        Date bookingDate = slotRS.getDate("DATE");
-                        slotStmt.close();
-                        System.out.println("Slot " + chosenSlotId + " automatically assigned on " + bookingDate + ".");
-
-                        // 3 - Get amount
-                        System.out.print("Enter amount: ");
-                        int amount = scanner.nextInt();
-                        scanner.nextLine();
-
-                        // 4 - Get payment method
-                        System.out.print("Enter payment method (e.g. CASH, CREDIT): ");
-                        String paymentMethod = scanner.nextLine();
-
-                        // 5 - Check for conflicts **** add another constraint in our DB where one booking per day?
-                        PreparedStatement checkStmt = con.prepareStatement(
-                                "SELECT COUNT(*) FROM BOOKING WHERE CUSTOMER_ID = ? AND BOOKING_DATE = ?");
-                        checkStmt.setInt(1, customerId);
-                        checkStmt.setDate(2, bookingDate);
-                        ResultSet rs = checkStmt.executeQuery();
-                        rs.next();
-                        int count = rs.getInt(1);
-
-                        if (count > 0) {
-                            System.out.println("This customer already has a booking on " + bookingDate + ".");
-                            System.out.println("Existing bookings:");
-                            PreparedStatement altStmt = con.prepareStatement(
-                                    "SELECT BOOKING_ID, STATUS, AMOUNT FROM BOOKING " +
-                                            "WHERE CUSTOMER_ID = ? AND BOOKING_DATE = ?");
-                            altStmt.setInt(1, customerId);
-                            altStmt.setDate(2, bookingDate);
-                            ResultSet altRS = altStmt.executeQuery();
-                            System.out.printf("  %-12s %-10s %-8s%n", "BookingID", "Status", "Amount");
-                            while (altRS.next()) {
-                                System.out.printf("  %-12d %-10s %-8d%n",
-                                        altRS.getInt(1), altRS.getString(2), altRS.getInt(3));
-                            }
-                            altStmt.close();
-
-                        } else {
-                            // 6 - Get next available BOOKING_ID
-                            ResultSet maxRS = statement.executeQuery("SELECT MAX(BOOKING_ID) FROM BOOKING");
-                            maxRS.next();
-                            int nextBookingId = maxRS.getInt(1) + 1;
-
-                            // 7 - Insert the booking in Bookings table
-                            String insertSQL = "INSERT INTO BOOKING " +
-                                    "(BOOKING_ID, CUSTOMER_ID, BOOKING_DATE, AMOUNT, PAYMENT_METHOD, STATUS) " +
-                                    "VALUES (?, ?, ?, ?, ?, ?)";
-                            PreparedStatement insertStmt = con.prepareStatement(insertSQL);
-                            insertStmt.setInt(1, nextBookingId);
-                            insertStmt.setInt(2, customerId);
-                            insertStmt.setDate(3, bookingDate);
-                            insertStmt.setInt(4, amount);
-                            insertStmt.setString(5, paymentMethod);
-                            insertStmt.setString(6, "PENDING");
-                        }
-
-                        checkStmt.close();
-
-                    // catch exceptions
-                    } catch (SQLException e) {
-                        sqlCode = e.getErrorCode();
-                        sqlState = e.getSQLState();
-                        System.out.println("SQL Error — Code: " + sqlCode + "  State: " + sqlState);
-                        System.out.println(e.getMessage());
-                    }
+                    createBooking(scanner,con)
                     break;
 
                 case 3:
@@ -368,6 +241,137 @@ class simpleJDBC
 
             System.out.println("Code: " + sqlCode + "  sqlState: " + sqlState);
             System.out.println(e);
+        }
+    }
+
+    // Menu option 2
+    private static void createBooking(Scanner scanner, Connection con, Statement statement) {
+        System.out.println("\n--- Creating New Booking ---");
+
+        try {
+            // 1 - Enter and validate customer with their ID
+            System.out.print("Enter Customer ID: ");
+            int customerId = scanner.nextInt();
+            scanner.nextLine();
+
+            // SQL query - Fetch the Customer ID from Customer table
+            String clientCheckSQL = "SELECT COUNT(*) FROM CUSTOMER WHERE CUSTOMER_ID = ?";
+            PreparedStatement clientStmt = con.prepareStatement(clientCheckSQL);
+            clientStmt.setInt(1, customerId);
+            ResultSet clientRS = clientStmt.executeQuery();
+            clientRS.next();
+
+            // If customer is new, add them to the system with all appropriate information
+            if (clientRS.getInt(1) == 0) {
+                System.out.println("Customer not found. Creating new customer...");
+
+                System.out.print("Enter customer name: ");
+                String name = scanner.nextLine();
+
+                System.out.print("Enter customer email: ");
+                String email = scanner.nextLine();
+
+                System.out.print("Enter customer phone: ");
+                String phone = scanner.nextLine();
+
+                // Insert the new customer's info in the Customer table
+                String insertClientSQL = "INSERT INTO CUSTOMER (CUSTOMER_ID, NAME, EMAIL, PHONE) VALUES (?, ?, ?, ?)";
+                PreparedStatement insertClientStmt = con.prepareStatement(insertClientSQL);
+                insertClientStmt.setInt(1, customerId);
+                insertClientStmt.setString(2, name);
+                insertClientStmt.setString(3, email);
+                insertClientStmt.setString(4, phone);
+                insertClientStmt.executeUpdate();
+                insertClientStmt.close();
+                System.out.println("New customer created. Welcome to DataBASS!");
+            }
+            clientStmt.close();
+
+            // 2 - Ask for desired date and find first available slot
+            System.out.print("Enter desired date (YYYY-MM-DD): ");
+            String dateInput = scanner.nextLine();
+
+            PreparedStatement slotStmt = con.prepareStatement(
+                    "SELECT SLOT_ID, DATE FROM CALENDARSLOT " +
+                            "WHERE UPPER(STATUS) = 'FREE' AND DATE = ? " +
+                            "FETCH FIRST 1 ROW ONLY");
+            slotStmt.setDate(1, Date.valueOf(dateInput));
+            ResultSet slotRS = slotStmt.executeQuery();
+
+            if (!slotRS.next()) {
+                System.out.println("No available slots on " + dateInput + ". Please try another date.");
+                slotStmt.close();
+                return;
+            }
+
+            int chosenSlotId = slotRS.getInt("SLOT_ID");
+            Date bookingDate = slotRS.getDate("DATE");
+            slotStmt.close();
+            System.out.println("Slot " + chosenSlotId + " automatically assigned on " + bookingDate + ".");
+
+            // 3 - Get amount
+            System.out.print("Enter amount: ");
+            int amount = scanner.nextInt();
+            scanner.nextLine();
+
+            // 4 - Get payment method
+            System.out.print("Enter payment method (e.g. CASH, CREDIT): ");
+            String paymentMethod = scanner.nextLine();
+
+            // 5 - Check for conflicts
+            PreparedStatement checkStmt = con.prepareStatement(
+                    "SELECT COUNT(*) FROM BOOKING WHERE CUSTOMER_ID = ? AND BOOKING_DATE = ?");
+            checkStmt.setInt(1, customerId);
+            checkStmt.setDate(2, bookingDate);
+            ResultSet rs = checkStmt.executeQuery();
+            rs.next();
+            int count = rs.getInt(1);
+
+            if (count > 0) {
+                System.out.println("This customer already has a booking on " + bookingDate + ".");
+                System.out.println("Existing bookings:");
+                PreparedStatement altStmt = con.prepareStatement(
+                        "SELECT BOOKING_ID, STATUS, AMOUNT FROM BOOKING " +
+                                "WHERE CUSTOMER_ID = ? AND BOOKING_DATE = ?");
+                altStmt.setInt(1, customerId);
+                altStmt.setDate(2, bookingDate);
+                ResultSet altRS = altStmt.executeQuery();
+                System.out.printf("  %-12s %-10s %-8s%n", "BookingID", "Status", "Amount");
+                while (altRS.next()) {
+                    System.out.printf("  %-12d %-10s %-8d%n",
+                            altRS.getInt(1), altRS.getString(2), altRS.getInt(3));
+                }
+                altStmt.close();
+
+            } else {
+                // 6 - Get next available BOOKING_ID
+                ResultSet maxRS = statement.executeQuery("SELECT MAX(BOOKING_ID) FROM BOOKING");
+                maxRS.next();
+                int nextBookingId = maxRS.getInt(1) + 1;
+
+                // 7 - Insert the booking
+                String insertSQL = "INSERT INTO BOOKING " +
+                        "(BOOKING_ID, CUSTOMER_ID, BOOKING_DATE, AMOUNT, PAYMENT_METHOD, STATUS) " +
+                        "VALUES (?, ?, ?, ?, ?, ?)";
+                PreparedStatement insertStmt = con.prepareStatement(insertSQL);
+                insertStmt.setInt(1, nextBookingId);
+                insertStmt.setInt(2, customerId);
+                insertStmt.setDate(3, bookingDate);
+                insertStmt.setInt(4, amount);
+                insertStmt.setString(5, paymentMethod);
+                insertStmt.setString(6, "PENDING");
+                insertStmt.executeUpdate();
+                insertStmt.close();
+                System.out.println("Booking " + nextBookingId + " created successfully.");
+            }
+
+            checkStmt.close();
+
+        } catch (SQLException e) {
+            int sqlCode = e.getErrorCode();
+            String sqlState = e.getSQLState();
+            System.out.println("SQL Error — Code: " + sqlCode + "  State: " + sqlState);
+            System.out.println(e.getMessage());
         }
     }
 
