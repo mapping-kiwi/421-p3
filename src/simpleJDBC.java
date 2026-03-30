@@ -656,6 +656,7 @@ class simpleJDBC
                 break;
             case 2:
                 System.out.println("\n--- Studio Utilization ---");
+                studioUtilization(scanner,con);
                 break;
             case 3:
                 employeeWorkload(scanner, con);
@@ -709,47 +710,64 @@ class simpleJDBC
                         takenOffers,
                         (offers - takenOffers)
                 );
+            }
 
-                System.out.println("Select an option: \n1)See all slots\n2)See taken slots\n3)See all free slots\n0)Do Nothing");
+            System.out.print("Enter studio room nb: ");
+            int key = scanner.nextInt();
+            while(!studioRooms.values().contains(key))
+            {
+                System.out.println("Invalid studio nb entered, please try again: ");
+                key = scanner.nextInt();
+            }
 
-                int selection = scanner.nextInt();
-                while(selection>=1 && selection<=3){
-                    System.out.print("Invalid option chosen, try again: ");
-                    selection = scanner.nextInt();
+            System.out.println("Select an option: \n1)See all slots\n2)See taken slots\n3)See all free slots\n0)Do Nothing");
+
+            int selection = scanner.nextInt();
+            while(selection<0 || selection>3){
+                System.out.print("Invalid option chosen, try again: ");
+                selection = scanner.nextInt();
+            }
+
+            querySQL = "SELECT SERVICE_ID FROM STUDIOROOM WHERE ROOM_NO="+key;
+            rs = statement.executeQuery(querySQL);
+            while(rs.next()) {
+                key = rs.getInt("SERVICE_ID");
+            }
+
+            switch(selection){
+                case 1:
+                    querySQL = "SELECT * FROM CALENDARSLOT WHERE SERVICE_ID="+key;
+                    break;
+                case 2:
+                    querySQL = "SELECT * FROM CALENDARSLOT WHERE SLOT_STATUS='TAKEN' AND SERVICE_ID="+key;
+                    break;
+                case 3:
+                    querySQL = "SELECT * FROM CALENDARSLOT WHERE SLOT_STATUS='FREE' AND SERVICE_ID="+key;
+                    break;
+                case 0:
+                    System.out.println("whoops");
+                    break;
+            }
+            if(selection!=0) {
+                rs = statement.executeQuery(querySQL);
+
+                System.out.printf("%-10s %-12s %-12s %-12s %-12s %-12s%n",
+                        "SLOT_ID", "SERVICE_ID", "DATE", "START_TIME", "END_TIME", "STATUS");
+                System.out.println("--------------------------------------------------------------------------");
+
+                while (rs.next()) {
+                    System.out.printf("%-10d %-12d %-12s %-12s %-12s %-12s%n",
+                            rs.getInt("SLOT_ID"),
+                            rs.getInt("SERVICE_ID"),
+                            rs.getString("DATE"),
+                            rs.getString("START_TIME"),
+                            rs.getString("END_TIME"),
+                            rs.getString("SLOT_STATUS")
+                    );
                 }
-
-                switch(selection){
-                    case 1:
-                        querySQL = "SELECT * FROM CALENDARSLOT WHERE SERVICE_ID="+key;
-                        break;
-                    case 2:
-                        querySQL = "SELECT * FROM CALENDARSLOT WHERE SLOT_STATUS='TAKEN' AND SERVICE_ID="+key;
-                        break;
-                    case 3:
-                        querySQL = "SELECT * FROM CALENDARSLOT WHERE SLOT_STATUS='FREE' AND SERVICE_ID="+key;
-                        break;
-                    case 0:
-                        System.out.println("whoops");
-                }
-                if(selection!=0) {
-                    rs = statement.executeQuery(querySQL);
-
-                    System.out.println();
-
-                    while (rs.next()) {
-                        System.out.printf("%-10d %-12d %-12s %-12s %-12s %-12s%n",
-                                rs.getInt("SLOT_ID"),
-                                rs.getInt("SERVICE_ID"),
-                                rs.getString("DATE"),
-                                rs.getString("START_TIME"),
-                                rs.getString("END_TIME"),
-                                rs.getString("SLOT_STATUS")
-                        );
-                    }
-                }
-                else{
-                    System.out.println("No changes were made.");
-                }
+            }
+            else{
+                System.out.println("No changes were made.");
             }
             //1st: get how often it is offered (count available and used)
             //2nd: get how many times it actually is used
