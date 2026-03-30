@@ -707,6 +707,48 @@ class simpleJDBC
         }
     }
 
+    //Menu option 5 sub-option 2
+    private static void studioUtilization(Scanner scanner, Connection con){
+
+        try{
+            //step 1: query our studios and store them in a hashset(?)
+                //actually might be easier to have a hashmap (serviceId, roomID) for searching purposes
+            String querySQL = "SELECT SERVICE_ID, ROOM_NO FROM STUDIOROOM";
+            //HashSet<Integer> studioRooms = new HashSet<>();
+            HashMap<Integer, Integer> studioRooms = new HashMap<>();
+            Statement statement = con.createStatement();
+            java.sql.ResultSet rs = statement.executeQuery(querySQL);
+            while(rs.next()){
+                int serviceId = rs.getInt("SERVICE_ID");
+                int roomNo = rs.getInt("ROOM_NO");
+                studioRooms.put(serviceId, roomNo);
+            }
+
+            //step 2: we should be able to query for a specific roomNo to see its utilization
+            for(int key : studioRooms.keySet()){
+                int offers = 0;
+                int takenOffers = 0;
+                querySQL = "SELECT * FROM CALENDARSLOT WHERE SERVICE_ID="+key;
+                rs = statement.executeQuery(querySQL);
+                while (rs.next()){
+                    offers+=1;
+                    if(rs.getString("SLOT_STATUS").equals("TAKEN")){
+                        takenOffers+=1;
+                    }
+                }
+            }
+            //1st: get how often it is offered (count available and used)
+            //2nd: get how many times it actually is used
+
+        } catch (SQLException e) {
+            int sqlCode = e.getErrorCode();
+            String sqlState = e.getSQLState();
+
+            System.out.println("SQL Error — Code: " + sqlCode + "  State: " + sqlState);
+            System.out.println(e.getMessage());
+        }
+    }
+
     //Menu option 5 sub-option 3
     private static void employeeWorkload(Scanner scanner, Connection con) {
         System.out.println("\n--- Employee Workload ---");
