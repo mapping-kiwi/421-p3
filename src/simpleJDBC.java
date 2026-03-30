@@ -18,9 +18,12 @@ class simpleJDBC
           tableName += "exampletbl";
 
         // Register the driver.  You must register the driver before you can use it.
-        try { DriverManager.registerDriver ( new com.ibm.db2.jcc.DB2Driver() ) ; }
-        catch (Exception cnfe){ System.out.println("Class not found"); }
-
+        try {
+            Class.forName("com.ibm.db2.jcc.DB2Driver");
+        } catch (ClassNotFoundException e) {
+            System.err.println("DB2 JDBC driver not found on the runtime classpath.");
+            return;
+        }
 
         String url = "jdbc:db2://winter2026-comp421.cs.mcgill.ca:50000/comp421";
 
@@ -147,6 +150,7 @@ class simpleJDBC
 
                 case 1:
                     /// santi
+                    processBookings(scanner,con);
                     System.out.println("\n--- View and/or Process Booking Requests ---");
 
                     System.out.printf("%-12s %-12s %-8s %-10s %-15s%n",
@@ -371,30 +375,118 @@ class simpleJDBC
 
                 case 4:
                     System.out.println("\n--- Rescheduling Booking ---");
-                    /// query all bookings
-                    /// or enter bookings nb? depends how we want to implement it
-                    booking_id  = scanner.nextInt();
-                    /// query "near" bookings and show potential booking alternatives
-                    /// update DB
+                    rescheduleBooking(scanner, con);
                     break;
 
                 case 5:
                     operationalInsights(scanner, con);
                     break;
-                case 0:
+                case 6:
                     System.out.println("Exiting...");
                     break;
                 default:
                     System.out.println("Invalid choice. Try again.");
             }
 
-        } while (choice != 0);
+        } while (choice != 6);
 
         scanner.close();
 
       // Finally but importantly close the statement and connection
       statement.close ( ) ;
       con.close ( ) ;
+    }
+
+
+    //Menu option 1
+    private static void processBookings(Scanner scanner, Connection con){
+
+        /// santi
+        System.out.println("\n--- View and/or Process Booking Requests ---");
+
+        System.out.printf("%-12s %-12s %-8s %-10s %-15s%n",
+                "BookingID", "Date", "Amount", "Status", "Payment");
+        System.out.println("-------------------------------------------------------------");
+
+        //step 1: query and show bookings that have "pending" as their status
+        String querySQL = "SELECT * FROM BOOKING WHERE UPPER(STATUS) = 'PENDING' ";
+        HashSet<Integer> validBookingIds = new HashSet<>();
+        try {
+            Statement statement = con.createStatement ( ) ;
+            java.sql.ResultSet rs = statement.executeQuery(querySQL);
+            while( rs.next() ){
+                int bookingId = rs.getInt("BOOKING_ID");
+                validBookingIds.add(bookingId);
+                String bookingDate = rs.getString("BOOKING_DATE");
+                int amount = rs.getInt("AMOUNT");
+                String status = rs.getString("STATUS");
+                System.out.printf("%-12d %-12s %-8d %-10s %-15s%n",
+                        bookingId, bookingDate, amount, status);
+            }
+            //step 2: ask user what booking id to select
+            System.out.println("Select BookingID: ");
+            int selection = scanner.nextInt();
+            while(!validBookingIds.contains(selection)){
+                System.out.println("Non valid BookingID selected, Please enter a valid BookingId");
+                selection = scanner.nextInt();
+            }
+
+            //step 2.5: show the booking again on the console for clarity
+            querySQL = "SELECT * FROM BOOKING WHERE BOOKING_ID="+selection;
+            rs = statement.executeQuery(querySQL);
+            System.out.printf("%-12s %-12s %-8s %-10s %-15s%n",
+                    "BookingID", "Date", "Amount", "Status", "Payment");
+            System.out.println("-------------------------------------------------------------");
+            if (rs.next()) {
+                String bookingId = rs.getString("BOOKING_ID");
+                String bookingDate = rs.getString("BOOKING_DATE");
+                int amount = rs.getInt("AMOUNT");
+                String status = rs.getString("STATUS");
+                String paymentMethod = rs.getString("PAYMENT_METHOD");
+
+                System.out.printf("%-12s %-12s %-8d %-10s %-15s%n",
+                        bookingId, bookingDate, amount, status, paymentMethod);
+            } else {
+                System.out.println("No booking found with that ID.");
+            }
+
+            //step 3: ask user what status to assign to the booking
+            System.out.println("Select status to assign: \n1)Confirm\n2)Reject\n3)Reschedule\n0)Cancel operation");
+            int secondSelection = scanner.nextInt();
+            while(!validBookingIds.contains(selection)){
+                System.out.println("Non valid status selected, Please enter a valid status");
+                secondSelection = scanner.nextInt();
+            }
+            switch(secondSelection){
+                case 1: //confirm
+                    querySQL = "UPDATE BOOKING SET STATUS='CONFIRMED' WHERE BOOKING_ID="+selection;
+                    break;
+                case 2: //reject
+                    querySQL = "UPDATE BOOKING SET STATUS='REJECTED' WHERE BOOKING_ID="+selection;
+                    break;
+                case 3: //reschedule
+                    querySQL = "UPDATE BOOKING SET STATUS='RESCHEDULE' WHERE BOOKING_ID="+selection;
+                    break;
+                case 0: //quit from option
+                    break;
+            }
+            if(secondSelection!=0) {
+                statement.execute(querySQL);
+                System.out.println("BookingID " + selection + " was successfully updated.");
+            }
+            else{
+                System.out.println("No changes were made.");
+            }
+
+        }
+        catch (SQLException e)
+        {
+            int sqlCode = e.getErrorCode(); // Get SQLCODE
+            String sqlState = e.getSQLState(); // Get SQLSTATE
+
+            System.out.println("Code: " + sqlCode + "  sqlState: " + sqlState);
+            System.out.println(e);
+        }
     }
 
     //Menu option 3
@@ -468,7 +560,206 @@ class simpleJDBC
             System.out.println(e);
         }
     }
-    
+
+    //Menu Option 4
+    private static void rescheduleBooking(Scanner scanner, Connection con){
+        System.out.println("\n--- Reschedule Booking ---");
+        //step 1: read booking Id
+
+        int bookingId;
+        while (true) {
+            try {
+                System.out.println("Enter Booking ID: ");
+                bookingId = scanner.nextInt();
+                scanner.nextLine();
+                break;
+            } catch (InputMismatchException e) {
+                System.out.println("Invalid input. Please enter a numeric booking ID.");
+                scanner.nextLine();
+            }
+        }
+        //step 2: check whether the booking exists
+
+        try {
+            String bookingCheckSQL = "SELECT COUNT(*) FROM BOOKING WHERE BOOKING_ID = ?";
+            PreparedStatement bookingCheckStmt = con.prepareStatement(bookingCheckSQL);
+            bookingCheckStmt.setInt(1, bookingId);
+            ResultSet rsBookingCheck = bookingCheckStmt.executeQuery();
+
+            rsBookingCheck.next();
+            int bookingCount = rsBookingCheck.getInt(1);
+
+            //step 3: re-prompt if booking DNE
+            //because the user might type a number that is numeric but invalid
+            while (bookingCount == 0){
+                while (true){
+                    try {
+                        System.out.println("Booking ID not found. Enter a valid booking ID: ");
+                        bookingId = scanner.nextInt();
+                        scanner.nextLine();
+                        break;
+                    } catch (InputMismatchException e) {
+                        System.out.println("Invalid input. Please enter a numeric booking ID.");
+                        scanner.nextLine();
+                    }
+                }
+                bookingCheckStmt.setInt(1, bookingId);
+                rsBookingCheck = bookingCheckStmt.executeQuery();
+                rsBookingCheck.next();
+                bookingCount = rsBookingCheck.getInt(1);
+            }
+
+            //step 4: fetch current slot and service info
+
+            String currentBookingSQL =
+                    "SELECT F.SLOT_ID, CS.SERVICE_ID, CS.DATE, CS.START_TIME, CS.END_TIME " +
+                            "FROM FILLS F " +
+                            "JOIN CALENDARSLOT CS ON F.SLOT_ID = CS.SLOT_ID " +
+                            "WHERE F.BOOKING_ID = ?";
+            PreparedStatement currentBookingStmt = con.prepareStatement(currentBookingSQL);
+            currentBookingStmt.setInt(1, bookingId);
+            ResultSet rsCurrentBooking = currentBookingStmt.executeQuery();
+
+            //important check because: A booking may exist in BOOKING, but if there is no row in FILLS, then it has no slot to reschedule.
+            if (!rsCurrentBooking.next()){
+                System.out.println("Booking exists but is not linked to any slot.");
+                bookingCheckStmt.close();
+                currentBookingStmt.close();
+                return;
+            }
+
+            int currentSlotId = rsCurrentBooking.getInt("SLOT_ID");
+            int currentServiceId = rsCurrentBooking.getInt("SERVICE_ID");
+            Date currentDate = rsCurrentBooking.getDate("DATE");
+            Time currentStartTime = rsCurrentBooking.getTime("START_TIME");
+            Time currentEndTime = rsCurrentBooking.getTime("END_TIME");
+
+            //step 5: show current booking details:
+            System.out.println("\nCurrent booking details:");
+            System.out.println("Booking ID: " + bookingId);
+            System.out.println("Current Slot ID: " + currentSlotId);
+            System.out.println("Service ID: " + currentServiceId);
+            System.out.println("Date: " + currentDate);
+            System.out.println("Time: " + currentStartTime + " - " + currentEndTime);
+
+            //step 6: find alternative slots:
+            String alternativesSQL =
+                    "SELECT SLOT_ID, DATE, START_TIME, END_TIME " +
+                            "FROM CALENDARSLOT " +
+                            "WHERE SERVICE_ID = ? " +
+                            "AND SLOT_STATUS = 'FREE' " +
+                            "AND SLOT_ID <> ? " +
+                            "AND DATE >= CURRENT_DATE " +
+                            "ORDER BY DATE, START_TIME";
+
+            PreparedStatement alternativesStmt = con.prepareStatement(alternativesSQL);
+            alternativesStmt.setInt(1, currentServiceId);
+            alternativesStmt.setInt(2, currentSlotId);
+            ResultSet rsAlternatives = alternativesStmt.executeQuery();
+
+
+            System.out.println("\nAvailable alternative slots:");
+            Set<Integer> availableSlotIds = printAndCapture(rsAlternatives, "SLOT_ID", Integer.class);
+
+            //step 7: handle 'no alternatives found'
+
+            if (availableSlotIds.isEmpty()) {
+                System.out.println("No alternative slots are available for this booking.");
+                System.out.print("Would you like to mark this booking as TO_RESCHEDULE? (yes/no): ");
+                String answer = scanner.nextLine().trim().toUpperCase();
+
+                if (answer.equals("YES")) {
+                    String markSQL = "UPDATE BOOKING SET BOOKING_STATUS = 'TO_RESCHEDULE' WHERE BOOKING_ID = ?";
+                    PreparedStatement markStmt = con.prepareStatement(markSQL);
+                    markStmt.setInt(1, bookingId);
+                    markStmt.executeUpdate();
+                    markStmt.close();
+
+                    System.out.println("Booking marked as TO_RESCHEDULE.");
+                } else {
+                    System.out.println("No changes were made.");
+                }
+
+                bookingCheckStmt.close();
+                currentBookingStmt.close();
+                alternativesStmt.close();
+                return;
+            }
+
+            //step 8: validate numeric input
+            int newSlotId;
+
+            while (true) {
+                try {
+                    System.out.print("Choose a replacement slot ID: ");
+                    newSlotId = scanner.nextInt();
+                    scanner.nextLine();
+                    break;
+                } catch (InputMismatchException e) {
+                    System.out.println("Invalid input. Please enter a numeric slot ID.");
+                    scanner.nextLine();
+                }
+            }
+
+            //validate against actual DB-returned options:
+            while (!availableSlotIds.contains(newSlotId)) {
+                while (true) {
+                    try {
+                        System.out.print("Invalid slot ID. Enter a valid replacement slot ID: ");
+                        newSlotId = scanner.nextInt();
+                        scanner.nextLine();
+                        break;
+                    } catch (InputMismatchException e) {
+                        System.out.println("Invalid input. Please enter a numeric slot ID.");
+                        scanner.nextLine();
+                    }
+                }
+            }
+
+            //step 9: apply the updates
+            //old slot becomes free
+            String freeOldSlotSQL = "UPDATE CALENDARSLOT SET SLOT_STATUS = 'FREE' WHERE SLOT_ID = ?";
+            PreparedStatement freeOldSlotStmt = con.prepareStatement(freeOldSlotSQL);
+            freeOldSlotStmt.setInt(1, currentSlotId);
+            freeOldSlotStmt.executeUpdate();
+
+            //new slot becomes taken
+            String takeNewSlotSQL = "UPDATE CALENDARSLOT SET SLOT_STATUS = 'TAKEN' WHERE SLOT_ID = ?";
+            PreparedStatement takeNewSlotStmt = con.prepareStatement(takeNewSlotSQL);
+            takeNewSlotStmt.setInt(1, newSlotId);
+            takeNewSlotStmt.executeUpdate();
+
+            //update the booking-to-slot relationship
+            String updateFillsSQL = "UPDATE FILLS SET SLOT_ID = ? WHERE BOOKING_ID = ?";
+            PreparedStatement updateFillsStmt = con.prepareStatement(updateFillsSQL);
+            updateFillsStmt.setInt(1, newSlotId);
+            updateFillsStmt.setInt(2, bookingId);
+            updateFillsStmt.executeUpdate();
+
+            //step 10: success message and cleanup
+            System.out.println("Booking " + bookingId + " successfully rescheduled to slot " + newSlotId + ".");
+
+            bookingCheckStmt.close();
+            currentBookingStmt.close();
+            alternativesStmt.close();
+            freeOldSlotStmt.close();
+            takeNewSlotStmt.close();
+            updateFillsStmt.close();
+
+            //step 11: catch SQL exceptions
+        } catch (SQLException e) {
+            int sqlCode = e.getErrorCode();
+            String sqlState = e.getSQLState();
+            System.out.println("Code: " + sqlCode + "  sqlState: " + sqlState);
+            System.out.println(e);
+        }
+    }
+
+
+
+
+
+
     //Menu Option 5
     private static void operationalInsights(Scanner scanner, Connection con) {        
         System.out.println("\n--- Operational Insights ---");
