@@ -150,6 +150,7 @@ class simpleJDBC
 
                 case 1:
                     /// santi
+                    processBookings(scanner,con);
                     System.out.println("\n--- View and/or Process Booking Requests ---");
 
                     System.out.printf("%-12s %-12s %-8s %-10s %-15s%n",
@@ -394,6 +395,98 @@ class simpleJDBC
       // Finally but importantly close the statement and connection
       statement.close ( ) ;
       con.close ( ) ;
+    }
+
+
+    //Menu option 1
+    private static void processBookings(Scanner scanner, Connection con){
+
+        /// santi
+        System.out.println("\n--- View and/or Process Booking Requests ---");
+
+        System.out.printf("%-12s %-12s %-8s %-10s %-15s%n",
+                "BookingID", "Date", "Amount", "Status", "Payment");
+        System.out.println("-------------------------------------------------------------");
+
+        //step 1: query and show bookings that have "pending" as their status
+        String querySQL = "SELECT * FROM BOOKING WHERE UPPER(STATUS) = 'PENDING' ";
+        HashSet<Integer> validBookingIds = new HashSet<>();
+        try {
+            Statement statement = con.createStatement ( ) ;
+            java.sql.ResultSet rs = statement.executeQuery(querySQL);
+            while( rs.next() ){
+                int bookingId = rs.getInt("BOOKING_ID");
+                validBookingIds.add(bookingId);
+                String bookingDate = rs.getString("BOOKING_DATE");
+                int amount = rs.getInt("AMOUNT");
+                String status = rs.getString("STATUS");
+                System.out.printf("%-12d %-12s %-8d %-10s %-15s%n",
+                        bookingId, bookingDate, amount, status);
+            }
+            //step 2: ask user what booking id to select
+            System.out.println("Select BookingID: ");
+            int selection = scanner.nextInt();
+            while(!validBookingIds.contains(selection)){
+                System.out.println("Non valid BookingID selected, Please enter a valid BookingId");
+                selection = scanner.nextInt();
+            }
+
+            //step 2.5: show the booking again on the console for clarity
+            querySQL = "SELECT * FROM BOOKING WHERE BOOKING_ID="+selection;
+            rs = statement.executeQuery(querySQL);
+            System.out.printf("%-12s %-12s %-8s %-10s %-15s%n",
+                    "BookingID", "Date", "Amount", "Status", "Payment");
+            System.out.println("-------------------------------------------------------------");
+            if (rs.next()) {
+                String bookingId = rs.getString("BOOKING_ID");
+                String bookingDate = rs.getString("BOOKING_DATE");
+                int amount = rs.getInt("AMOUNT");
+                String status = rs.getString("STATUS");
+                String paymentMethod = rs.getString("PAYMENT_METHOD");
+
+                System.out.printf("%-12s %-12s %-8d %-10s %-15s%n",
+                        bookingId, bookingDate, amount, status, paymentMethod);
+            } else {
+                System.out.println("No booking found with that ID.");
+            }
+
+            //step 3: ask user what status to assign to the booking
+            System.out.println("Select status to assign: \n1)Confirm\n2)Reject\n3)Reschedule\n0)Cancel operation");
+            int secondSelection = scanner.nextInt();
+            while(!validBookingIds.contains(selection)){
+                System.out.println("Non valid status selected, Please enter a valid status");
+                secondSelection = scanner.nextInt();
+            }
+            switch(secondSelection){
+                case 1: //confirm
+                    querySQL = "UPDATE BOOKING SET STATUS='CONFIRMED' WHERE BOOKING_ID="+selection;
+                    break;
+                case 2: //reject
+                    querySQL = "UPDATE BOOKING SET STATUS='REJECTED' WHERE BOOKING_ID="+selection;
+                    break;
+                case 3: //reschedule
+                    querySQL = "UPDATE BOOKING SET STATUS='RESCHEDULE' WHERE BOOKING_ID="+selection;
+                    break;
+                case 0: //quit from option
+                    break;
+            }
+            if(secondSelection!=0) {
+                statement.execute(querySQL);
+                System.out.println("BookingID " + selection + " was successfully updated.");
+            }
+            else{
+                System.out.println("No changes were made.");
+            }
+
+        }
+        catch (SQLException e)
+        {
+            int sqlCode = e.getErrorCode(); // Get SQLCODE
+            String sqlState = e.getSQLState(); // Get SQLSTATE
+
+            System.out.println("Code: " + sqlCode + "  sqlState: " + sqlState);
+            System.out.println(e);
+        }
     }
 
     //Menu option 3
