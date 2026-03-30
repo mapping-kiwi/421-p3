@@ -378,18 +378,18 @@ class simpleJDBC
     }
 
     //Menu option 3
-    private static void assignEmployeesToSlots(Scanner scanner, Connection con) {        
+    private static void assignEmployeesToSlots(Scanner scanner, Connection con) {
         System.out.println("\n--- Assign Employee to a Booked Time Slot ---");
-        
-        try {        
+
+        try {
             Statement statement = con.createStatement ( ) ;
 
             //1. Display unassigned booked slots offering EmployeePosition services
-            String unassigned_slots = 
+            String unassigned_slots =
                 "SELECT * FROM CalendarSlot C " +
                 //Service is an EmployeePosition. USING tells DB to merge duplicate service_id columns into one.
                 "JOIN EmployeePosition E USING (service_id) " +
-                //Booked 
+                //Booked
                 "WHERE slot_status = 'TAKEN' " +
                 //Not already assigned to an employee
                 "AND slot_id NOT IN (SELECT slot_id FROM isAssigned)"
@@ -405,7 +405,7 @@ class simpleJDBC
                 System.out.println("Invalid SlotID selected. Please enter a valid SlotID.");
                 slot_selected = scanner.nextInt();
             }
-            
+
             //3. Retrieve available employees by calling stored procedure GetEligible Employees
             CallableStatement cstmt_employees = con.prepareCall("{call GetEligibleEmployees(?)}");
             cstmt_employees.setInt(1,slot_selected);
@@ -442,8 +442,8 @@ class simpleJDBC
         }
         catch (SQLException e)
         {
-            int sqlCode = e.getErrorCode(); 
-            String sqlState = e.getSQLState(); 
+            int sqlCode = e.getErrorCode();
+            String sqlState = e.getSQLState();
             System.out.println("Code: " + sqlCode + "  sqlState: " + sqlState);
             System.out.println(e);
         }
@@ -645,9 +645,9 @@ class simpleJDBC
 
 
     //Menu Option 5
-    private static void operationalInsights(Scanner scanner, Connection con) {        
+    private static void operationalInsights(Scanner scanner, Connection con) {
         System.out.println("\n--- Operational Insights ---");
-        
+
         int nestedChoice;
         System.out.println("1) View Bookings By Service");
         System.out.println("2) View Studio Utilization");
@@ -669,6 +669,7 @@ class simpleJDBC
                 break;
             case 4:
                 System.out.println("\n--- Busy Working Periods ---");
+                busiestPeriods(con);
                 break;
             default:
                 System.out.println("Invalid Option Selected");
@@ -793,9 +794,9 @@ class simpleJDBC
 
         try {
             Statement statement = con.createStatement ( ) ;
-            
+
             //DB optimizer sees I am joining Employee to isAssigned using employee_no --> uses the INDEX instead of searching the whole table row by row
-            String employee_workload = 
+            String employee_workload =
                 "SELECT E.name, COUNT(A.slot_id) AS total_bookings, " +
                     "SUM(HOUR(S.end_time - S.start_time)) AS total_hours " +
                 "FROM Employee E " +
@@ -811,12 +812,74 @@ class simpleJDBC
 
         catch (SQLException e)
         {
-            int sqlCode = e.getErrorCode(); 
-            String sqlState = e.getSQLState(); 
+            int sqlCode = e.getErrorCode();
+            String sqlState = e.getSQLState();
             System.out.println("Code: " + sqlCode + "  sqlState: " + sqlState);
             System.out.println(e);
-        }        
+        }
     }
+
+    // Menu option 5 sub-option 4
+
+    // Returns list of busiest booking periods in 3 hour intervals from opening hours 9am-6pm ordered by the time of day
+    // Busiest booking periods are defined as periods with the most bookings during a certain time
+    private static void busiestPeriods(Connection con) {
+        System.out.println("\n--- Busiest Booking Periods by Time of Day ---");
+
+        try {
+            Statement statement = con.createStatement();
+
+            // JOINING ORDER: BOOKING -> FILLS -> CALENDARSLOT -> start time of each booking's slot.
+            String querySQL =
+                    "SELECT " +
+                            "  CASE " +
+                            // morning
+                            "    WHEN HOUR(START_TIME) BETWEEN 9 AND 11  THEN '09:00 - 12:00' " +
+                            // afternoon
+                            "    WHEN HOUR(START_TIME) BETWEEN 12 AND 14 THEN '12:00 - 15:00' " +
+                            // late afternoon
+                            "    WHEN HOUR(START_TIME) BETWEEN 15 AND 17 THEN '15:00 - 18:00' " +
+                            // catch-all for special slots outside of operating hours
+                            "    ELSE 'Other' " +
+                            "  END AS TIME_PERIOD, " +
+                            "  COUNT(B.BOOKING_ID) AS NUM_BOOKINGS " +
+                            "FROM BOOKING B " +
+                            "JOIN FILLS F ON B.BOOKING_ID = F.BOOKING_ID " +
+                            "JOIN CALENDARSLOT CS ON F.SLOT_ID = CS.SLOT_ID " +
+
+                            // group by
+                            "GROUP BY " +
+                            "  CASE " +
+                            "    WHEN HOUR(START_TIME) BETWEEN 9 AND 11  THEN '09:00 - 12:00' " +
+                            "    WHEN HOUR(START_TIME) BETWEEN 12 AND 14 THEN '12:00 - 15:00' " +
+                            "    WHEN HOUR(START_TIME) BETWEEN 15 AND 17 THEN '15:00 - 18:00' " +
+                            "    ELSE 'Other' " +
+                            "  END " +
+                            // show busiest periods first
+                            "ORDER BY COUNT(B.BOOKING_ID) DESC";
+
+            ResultSet rs = statement.executeQuery(querySQL);
+
+            // print formatted results
+            System.out.printf("%-20s %-15s%n", "Time Period", "Num Bookings");
+            System.out.println("------------------------------------");
+            while (rs.next()) {
+                System.out.printf("%-20s %-15d%n",
+                        rs.getString("TIME_PERIOD"),
+                        rs.getInt("NUM_BOOKINGS"));
+            }
+
+            statement.close();
+
+        } catch (SQLException e) {
+            int sqlCode = e.getErrorCode();
+            String sqlState = e.getSQLState();
+            System.out.println("Code: " + sqlCode + "  sqlState: " + sqlState);
+            System.out.println(e);
+        }
+    }
+
+
 
     // HELPER FUNCTIONS we can all use
 
@@ -868,8 +931,8 @@ class simpleJDBC
             }
             System.out.println();
         }
-        
+
         return attributeSet;
     }
-    
+
 }
