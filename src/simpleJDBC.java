@@ -342,14 +342,11 @@ class simpleJDBC
             switch(secondSelection){
                 case 1: //confirm
                     querySQL = "UPDATE BOOKING SET BOOKING_STATUS='APPROVED' WHERE BOOKING_ID="+selection;
-                    querySQL = "UPDATE BOOKING SET BOOKING_STATUS='APPROVED' WHERE BOOKING_ID="+selection;
                     break;
                 case 2: //reject
                     querySQL = "UPDATE BOOKING SET BOOKING_STATUS='CANCELLED' WHERE BOOKING_ID="+selection;
-                    querySQL = "UPDATE BOOKING SET BOOKING_STATUS='CANCELLED' WHERE BOOKING_ID="+selection;
                     break;
                 case 3: //reschedule
-                    querySQL = "UPDATE BOOKING SET BOOKING_STATUS='TO_RESCHEDULE' WHERE BOOKING_ID="+selection;
                     querySQL = "UPDATE BOOKING SET BOOKING_STATUS='TO_RESCHEDULE' WHERE BOOKING_ID="+selection;
                     break;
                 case 0: //quit from option
