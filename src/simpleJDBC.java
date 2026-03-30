@@ -149,7 +149,7 @@ class simpleJDBC
 
                 case 2:
                     //elisha
-                    createBooking(scanner,con)
+                    createBooking(scanner,con);
                     break;
 
                 case 3:
@@ -245,7 +245,7 @@ class simpleJDBC
     }
 
     // Menu option 2
-    private static void createBooking(Scanner scanner, Connection con, Statement statement) {
+    private static void createBooking(Scanner scanner, Connection con) {
         System.out.println("\n--- Creating New Booking ---");
 
         try {
@@ -293,7 +293,7 @@ class simpleJDBC
 
             PreparedStatement slotStmt = con.prepareStatement(
                     "SELECT SLOT_ID, DATE FROM CALENDARSLOT " +
-                            "WHERE UPPER(STATUS) = 'FREE' AND DATE = ? " +
+                            "WHERE UPPER(SLOT_STATUS) = 'FREE' AND DATE = ? " +
                             "FETCH FIRST 1 ROW ONLY");
             slotStmt.setDate(1, Date.valueOf(dateInput));
             ResultSet slotRS = slotStmt.executeQuery();
@@ -331,7 +331,7 @@ class simpleJDBC
                 System.out.println("This customer already has a booking on " + bookingDate + ".");
                 System.out.println("Existing bookings:");
                 PreparedStatement altStmt = con.prepareStatement(
-                        "SELECT BOOKING_ID, STATUS, AMOUNT FROM BOOKING " +
+                        "SELECT BOOKING_ID, BOOKING_STATUS, AMOUNT FROM BOOKING " +
                                 "WHERE CUSTOMER_ID = ? AND BOOKING_DATE = ?");
                 altStmt.setInt(1, customerId);
                 altStmt.setDate(2, bookingDate);
@@ -345,13 +345,15 @@ class simpleJDBC
 
             } else {
                 // 6 - Get next available BOOKING_ID
-                ResultSet maxRS = statement.executeQuery("SELECT MAX(BOOKING_ID) FROM BOOKING");
+                Statement stmt = con.createStatement();
+                ResultSet maxRS = stmt.executeQuery("SELECT MAX(BOOKING_ID) FROM BOOKING");
                 maxRS.next();
                 int nextBookingId = maxRS.getInt(1) + 1;
+                stmt.close();
 
                 // 7 - Insert the booking
                 String insertSQL = "INSERT INTO BOOKING " +
-                        "(BOOKING_ID, CUSTOMER_ID, BOOKING_DATE, AMOUNT, PAYMENT_METHOD, STATUS) " +
+                        "(BOOKING_ID, CUSTOMER_ID, BOOKING_DATE, AMOUNT, PAYMENT_METHOD, BOOKING_STATUS) " +
                         "VALUES (?, ?, ?, ?, ?, ?)";
                 PreparedStatement insertStmt = con.prepareStatement(insertSQL);
                 insertStmt.setInt(1, nextBookingId);
@@ -756,7 +758,7 @@ class simpleJDBC
                 rs = statement.executeQuery(querySQL);
 
                 System.out.printf("%-10s %-12s %-12s %-12s %-12s %-12s%n",
-                        "SLOT_ID", "SERVICE_ID", "DATE", "START_TIME", "END_TIME", "STATUS");
+                        "SLOT_ID", "SERVICE_ID", "DATE", "START_TIME", "END_TIME", "SLOT_STATUS");
                 System.out.println("--------------------------------------------------------------------------");
 
                 while (rs.next()) {
