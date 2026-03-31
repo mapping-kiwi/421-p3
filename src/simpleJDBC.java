@@ -201,34 +201,38 @@ class simpleJDBC {
                         continue;
                     }
 
-                    Date bookingDate;
                     int chosenSlotId;
-
-                    String slotSql =
-                            "SELECT SLOT_ID, DATE FROM CALENDARSLOT " +
-                                    "WHERE UPPER(SLOT_STATUS) = 'FREE' AND DATE = ? " +
-                                    "FETCH FIRST 1 ROW ONLY";
+                    String slotSql = "SELECT SLOT_ID, START_TIME, END_TIME, DATE FROM CALENDARSLOT " +
+                                 "WHERE UPPER(SLOT_STATUS) = 'FREE' AND VARCHAR_FORMAT(DATE, 'YYYY-MM-DD') = ?";
 
                     try (PreparedStatement slotStatement = connection.prepareStatement(slotSql)) {
-                        slotStatement.setDate(1, desiredDate);
+                        slotStatement.setString(1, dateInput); 
+                        
                         try (ResultSet slotResult = slotStatement.executeQuery()) {
-                            if (!slotResult.next()) {
-                                System.out.println("No available slots on " + dateInput + ". Please try another date.");
+                            System.out.println("Searching for slots on: " + dateInput);
+                            
+                            Set<Integer> availableSlotIds = printAndCapture(slotResult, "SLOT_ID", Integer.class);
+
+                            if (availableSlotIds.isEmpty()) {
+                                System.out.println("No available slots found for " + dateInput + ".");
                                 continue;
                             }
-                            chosenSlotId = slotResult.getInt("SLOT_ID");
-                            bookingDate = slotResult.getDate("DATE");
+                            
+                            chosenSlotId = promptForSelection(
+                                    scanner,
+                                    availableSlotIds,
+                                    "Select Slot ID to book: ",
+                                    "Invalid Slot ID. Please choose from the list above."
+                            );
                         }
                     }
-
-                    System.out.println("Slot " + chosenSlotId + " automatically assigned on " + bookingDate + ".");
 
                     int amount = readInt(scanner, "Enter amount: ");
                     System.out.print("Enter payment method (e.g. CASH, CREDIT): ");
                     String paymentMethod = scanner.nextLine().trim();
 
-                    if (customerHasBookingOnDate(connection, customerId, bookingDate)) {
-                        printExistingCustomerBookings(connection, customerId, bookingDate);
+                    if (customerHasBookingOnDate(connection, customerId, desiredDate)) {
+                        printExistingCustomerBookings(connection, customerId, desiredDate);
                         continue;
                     }
 
@@ -242,7 +246,7 @@ class simpleJDBC {
                     try (PreparedStatement insertStatement = connection.prepareStatement(insertBookingSql)) {
                         insertStatement.setInt(1, nextBookingId);
                         insertStatement.setInt(2, customerId);
-                        insertStatement.setDate(3, bookingDate);
+                        insertStatement.setDate(3, desiredDate);
                         insertStatement.setInt(4, amount);
                         insertStatement.setString(5, paymentMethod);
                         insertStatement.setString(6, "PENDING");
