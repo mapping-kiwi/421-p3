@@ -409,7 +409,7 @@ class simpleJDBC {
                         assignmentStatement.executeUpdate();
                     }
 
-                    System.out.println("Current assignments for Employee " + selectedEmployeeNo + ": ");
+                    System.out.println("Assignment completed.\n Current assignments for Employee " + selectedEmployeeNo + ": ");
                     String employeeAssignmentsSql = "SELECT * FROM ISASSIGNED WHERE employee_no = ?";
                     try (PreparedStatement assignmentsView = connection.prepareStatement(employeeAssignmentsSql)) {
                         assignmentsView.setInt(1, selectedEmployeeNo);
@@ -871,11 +871,9 @@ class simpleJDBC {
         int columnCount = metadata.getColumnCount();
         Set<T> capturedValues = new HashSet<>();
 
-        // 1. Print Header (Updated to match printResultSet logic)
         for (int i = 1; i <= columnCount; i++) {
             System.out.printf("%-20s", metadata.getColumnName(i).toUpperCase());
         }
-        // Use the same dynamic calculation here
         System.out.println("\n" + "-".repeat(columnCount * 20));
 
         while (resultSet.next()) {
