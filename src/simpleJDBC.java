@@ -184,65 +184,79 @@ class simpleJDBC {
         System.out.println("\n--- Creating New Booking ---");
 
         try {
+            // Ask for customer ID once, before the loop
             int customerId = readInt(scanner, "Enter Customer ID: ");
             ensureCustomerExists(scanner, connection, customerId);
 
-            System.out.print("Enter desired date (YYYY-MM-DD): ");
-            String dateInput = scanner.nextLine().trim();
+            while (true) {
+                try {
+                    System.out.print("Enter desired date (YYYY-MM-DD): ");
+                    String dateInput = scanner.nextLine().trim();
 
-            Date bookingDate;
-            int chosenSlotId;
-
-            String slotSql =
-                    "SELECT SLOT_ID, DATE FROM CALENDARSLOT " +
-                    "WHERE UPPER(SLOT_STATUS) = 'FREE' AND DATE = ? " +
-                    "FETCH FIRST 1 ROW ONLY";
-
-            try (PreparedStatement slotStatement = connection.prepareStatement(slotSql)) {
-                slotStatement.setDate(1, Date.valueOf(dateInput));
-
-                try (ResultSet slotResult = slotStatement.executeQuery()) {
-                    if (!slotResult.next()) {
-                        System.out.println("No available slots on " + dateInput + ". Please try another date.");
-                        return;
+                    // Check if date is in the past
+                    Date today = new Date(System.currentTimeMillis());
+                    Date desiredDate = Date.valueOf(dateInput);
+                    if (desiredDate.before(today)) {
+                        System.out.println("Cannot book a date in the past. Please try another date.");
+                        continue;
                     }
 
-                    chosenSlotId = slotResult.getInt("SLOT_ID");
-                    bookingDate = slotResult.getDate("DATE");
+                    Date bookingDate;
+                    int chosenSlotId;
+
+                    String slotSql =
+                            "SELECT SLOT_ID, DATE FROM CALENDARSLOT " +
+                                    "WHERE UPPER(SLOT_STATUS) = 'FREE' AND DATE = ? " +
+                                    "FETCH FIRST 1 ROW ONLY";
+
+                    try (PreparedStatement slotStatement = connection.prepareStatement(slotSql)) {
+                        slotStatement.setDate(1, desiredDate);
+                        try (ResultSet slotResult = slotStatement.executeQuery()) {
+                            if (!slotResult.next()) {
+                                System.out.println("No available slots on " + dateInput + ". Please try another date.");
+                                continue;
+                            }
+                            chosenSlotId = slotResult.getInt("SLOT_ID");
+                            bookingDate = slotResult.getDate("DATE");
+                        }
+                    }
+
+                    System.out.println("Slot " + chosenSlotId + " automatically assigned on " + bookingDate + ".");
+
+                    int amount = readInt(scanner, "Enter amount: ");
+                    System.out.print("Enter payment method (e.g. CASH, CREDIT): ");
+                    String paymentMethod = scanner.nextLine().trim();
+
+                    if (customerHasBookingOnDate(connection, customerId, bookingDate)) {
+                        printExistingCustomerBookings(connection, customerId, bookingDate);
+                        continue;
+                    }
+
+                    int nextBookingId = getNextBookingId(connection);
+
+                    String insertBookingSql =
+                            "INSERT INTO BOOKING " +
+                                    "(BOOKING_ID, CUSTOMER_ID, BOOKING_DATE, AMOUNT, PAYMENT_METHOD, BOOKING_STATUS) " +
+                                    "VALUES (?, ?, ?, ?, ?, ?)";
+
+                    try (PreparedStatement insertStatement = connection.prepareStatement(insertBookingSql)) {
+                        insertStatement.setInt(1, nextBookingId);
+                        insertStatement.setInt(2, customerId);
+                        insertStatement.setDate(3, bookingDate);
+                        insertStatement.setInt(4, amount);
+                        insertStatement.setString(5, paymentMethod);
+                        insertStatement.setString(6, "PENDING");
+                        insertStatement.executeUpdate();
+                    }
+
+                    System.out.println("Booking " + nextBookingId + " created successfully.");
+                    break;
+
+                } catch (IllegalArgumentException e) {
+                    System.out.println("Invalid date format. Please use YYYY-MM-DD.");
                 }
             }
 
-            System.out.println("Slot " + chosenSlotId + " automatically assigned on " + bookingDate + ".");
-
-            int amount = readInt(scanner, "Enter amount: ");
-            System.out.print("Enter payment method (e.g. CASH, CREDIT): ");
-            String paymentMethod = scanner.nextLine().trim();
-
-            if (customerHasBookingOnDate(connection, customerId, bookingDate)) {
-                printExistingCustomerBookings(connection, customerId, bookingDate);
-                return;
-            }
-
-            int nextBookingId = getNextBookingId(connection);
-
-            String insertBookingSql =
-                    "INSERT INTO BOOKING " +
-                    "(BOOKING_ID, CUSTOMER_ID, BOOKING_DATE, AMOUNT, PAYMENT_METHOD, BOOKING_STATUS) " +
-                    "VALUES (?, ?, ?, ?, ?, ?)";
-
-            try (PreparedStatement insertStatement = connection.prepareStatement(insertBookingSql)) {
-                insertStatement.setInt(1, nextBookingId);
-                insertStatement.setInt(2, customerId);
-                insertStatement.setDate(3, bookingDate);
-                insertStatement.setInt(4, amount);
-                insertStatement.setString(5, paymentMethod);
-                insertStatement.setString(6, "PENDING");
-                insertStatement.executeUpdate();
-            }
-
-            System.out.println("Booking " + nextBookingId + " created successfully.");
-        } catch (IllegalArgumentException e) {
-            System.out.println("Invalid date format. Please use YYYY-MM-DD.");
         } catch (SQLException e) {
             printSqlException(e);
         }
