@@ -740,11 +740,12 @@ class simpleJDBC {
 
     private static void showEmployeeWorkload(Connection connection) {
         String employeeWorkloadSql =
-                "SELECT E.name, COUNT(A.slot_id) AS total_bookings, " +
+                "SELECT E.name, " +
+                "COUNT(A.slot_id) AS total_slots, " + 
                 "SUM(HOUR(S.end_time - S.start_time)) AS total_hours " +
-                "FROM EMPLOYEE E " +
-                "JOIN ISASSIGNED A ON E.employee_no = A.employee_no " +
-                "JOIN CALENDARSLOT S ON A.slot_id = S.slot_id " +
+                "FROM Employee E " +
+                "JOIN isAssigned A ON E.employee_no = A.employee_no " +
+                "JOIN CalendarSlot S ON A.slot_id = S.slot_id " +
                 "GROUP BY E.name";
 
         try (Statement statement = connection.createStatement();
@@ -853,13 +854,13 @@ class simpleJDBC {
         int columnCount = metadata.getColumnCount();
 
         for (int i = 1; i <= columnCount; i++) {
-            System.out.printf("%-18s", metadata.getColumnName(i));
+            System.out.printf("%-24s", metadata.getColumnName(i));
         }
         System.out.println("\n" + "-".repeat(columnCount * 18));
 
         while (resultSet.next()) {
             for (int i = 1; i <= columnCount; i++) {
-                System.out.printf("%-18s", resultSet.getString(i));
+                System.out.printf("%-24s", resultSet.getString(i));
             }
             System.out.println();
         }
