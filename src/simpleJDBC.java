@@ -614,14 +614,20 @@ class simpleJDBC {
     }
 
     private static void showBookingsByService(Connection connection) {
-        String querySql =
-                "SELECT CS.service_id, COUNT(*) AS booking_count " +
-                "FROM BOOKING B " +
-                "JOIN FILLS F ON B.booking_id = F.booking_id " +
-                "JOIN CALENDARSLOT CS ON F.slot_id = CS.slot_id " +
-                "WHERE B.booking_status = 'APPROVED' " +
-                "GROUP BY CS.service_id " +
-                "ORDER BY booking_count DESC";
+        String querySql = 
+            "SELECT " +
+            "  CS.service_id, " +
+            "  COALESCE(EP.title, 'Room #' || CAST(SR.room_no AS VARCHAR(10)), ET.name) AS service_title, " +
+            "  COUNT(*) AS booking_count " +
+            "FROM BOOKING B " +
+            "JOIN FILLS F ON B.booking_id = F.booking_id " +
+            "JOIN CALENDARSLOT CS ON F.slot_id = CS.slot_id " +
+            "LEFT JOIN EmployeePosition EP ON CS.service_id = EP.service_id " +
+            "LEFT JOIN StudioRoom SR ON CS.service_id = SR.service_id " +
+            "LEFT JOIN EquipmentType ET ON CS.service_id = ET.service_id " +
+            "WHERE B.booking_status = 'APPROVED' " +
+            "GROUP BY CS.service_id, EP.title, SR.room_no, ET.name " +
+            "ORDER BY booking_count DESC";
 
         try (Statement statement = connection.createStatement();
              ResultSet result = statement.executeQuery(querySql)) {
@@ -686,7 +692,7 @@ class simpleJDBC {
             String querySql = buildStudioSlotsQuery(selection, serviceId);
 
             try (ResultSet slots = statement.executeQuery(querySql)) {
-                printStudioSlots(slots);
+                printResultSet(slots);
             }
         } catch (SQLException e) {
             printSqlException(e);
@@ -724,31 +730,6 @@ class simpleJDBC {
                 return "SELECT * FROM CALENDARSLOT WHERE SLOT_STATUS = 'FREE' AND SERVICE_ID = " + serviceId;
             default:
                 return "";
-        }
-    }
-
-    private static void printStudioSlots(ResultSet resultSet) throws SQLException {
-        System.out.printf(
-                "%-10s %-12s %-12s %-12s %-12s %-12s%n",
-                "SLOT_ID",
-                "SERVICE_ID",
-                "DATE",
-                "START_TIME",
-                "END_TIME",
-                "SLOT_STATUS"
-        );
-        System.out.println("--------------------------------------------------------------------------");
-
-        while (resultSet.next()) {
-            System.out.printf(
-                    "%-10d %-12d %-12s %-12s %-12s %-12s%n",
-                    resultSet.getInt("SLOT_ID"),
-                    resultSet.getInt("SERVICE_ID"),
-                    resultSet.getString("DATE"),
-                    resultSet.getString("START_TIME"),
-                    resultSet.getString("END_TIME"),
-                    resultSet.getString("SLOT_STATUS")
-            );
         }
     }
 
@@ -868,13 +849,13 @@ class simpleJDBC {
         int columnCount = metadata.getColumnCount();
 
         for (int i = 1; i <= columnCount; i++) {
-            System.out.printf("%-24s", metadata.getColumnName(i));
+            System.out.printf("%-20s", metadata.getColumnName(i));
         }
-        System.out.println("\n" + "-".repeat(columnCount * 18));
+        System.out.println("\n" + "-".repeat(columnCount * 20));
 
         while (resultSet.next()) {
             for (int i = 1; i <= columnCount; i++) {
-                System.out.printf("%-24s", resultSet.getString(i));
+                System.out.printf("%-20s", resultSet.getString(i));
             }
             System.out.println();
         }
@@ -886,17 +867,19 @@ class simpleJDBC {
         int columnCount = metadata.getColumnCount();
         Set<T> capturedValues = new HashSet<>();
 
+        // 1. Print Header (Updated to match printResultSet logic)
         for (int i = 1; i <= columnCount; i++) {
-            System.out.printf("%-18s", metadata.getColumnName(i).toUpperCase());
+            System.out.printf("%-20s", metadata.getColumnName(i).toUpperCase());
         }
-        System.out.println("\n" + "-".repeat(70));
+        // Use the same dynamic calculation here
+        System.out.println("\n" + "-".repeat(columnCount * 20));
 
         while (resultSet.next()) {
             for (int i = 1; i <= columnCount; i++) {
                 String columnName = metadata.getColumnName(i);
                 Object value = resultSet.getObject(i);
 
-                System.out.printf("%-18s", value);
+                System.out.printf("%-20s", value);
 
                 if (columnName.equalsIgnoreCase(targetColumn) && value != null) {
                     capturedValues.add(type.cast(value));
